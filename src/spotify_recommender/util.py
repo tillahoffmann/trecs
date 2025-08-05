@@ -83,13 +83,27 @@ def sampled_dot_cross_entropy_with_integer_labels(
     assert sampled_embedding.shape == (batch_size, num_samples, num_features)
     sampled_logits = jnp.vecdot(query[:, None, :], sampled_embedding)
     label_logits = jnp.vecdot(query, embedding[labels])
-    # We have to make sure we don't double-count the labeled logit.
+
+    # We take off the maximum value for numerical stability just like log-sum-exp.
+    max_logits = jnp.maximum(label_logits, sampled_logits.max(axis=-1))
+    sampled_logits = sampled_logits - max_logits[:, None]
+    label_logits = label_logits - max_logits
+
+    # We have to make sure we don't double-count the labeled logit, so we count the
+    # number of times we accidentally sampled the label.
+    num_hits = (labels[:, None] == idx).sum(axis=-1)
+    sampled_negative_exp = jnp.sum(
+        jnp.exp(sampled_logits), axis=-1
+    ) - num_hits * jnp.exp(label_logits)
+
+    # Edge case of only sampling the positive class.
+    effective_num_neg_samples = num_samples - num_hits
+    scale = jnp.where(
+        effective_num_neg_samples > 0,
+        (num_classes - 1) / effective_num_neg_samples,
+        0.0,
+    )
+
     return -(
-        label_logits
-        - jnp.log(
-            jnp.exp(label_logits)
-            + (num_classes - 1)
-            / num_samples
-            * jnp.sum(jnp.exp(sampled_logits), axis=-1)
-        )
+        label_logits - jnp.log(jnp.exp(label_logits) + scale * sampled_negative_exp)
     )
