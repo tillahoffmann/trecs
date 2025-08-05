@@ -4,7 +4,7 @@ import pickle
 import sqlite3
 from torch.utils.data import Dataset
 from typing import Any, Iterable, Iterator, Literal, Mapping, Self
-from .util import safe_write
+from ..util import safe_write
 
 
 SELECT_PLAYLISTS_BY_SPLIT = """

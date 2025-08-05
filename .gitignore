@@ -6,6 +6,6 @@ __pycache__/
 *.egg-info
 *.ipynb
 *.ipynb-checkpoint
-data/
+/data/
 htmlcov/
 playground/
