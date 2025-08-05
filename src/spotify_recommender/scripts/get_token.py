@@ -37,7 +37,7 @@ async def token() -> str:
 @app.get("/callback")
 def callback(code: str) -> str:
     url = "https://accounts.spotify.com/api/token"
-    client_id =os.environ["SPOTIFY_CLIENT_ID"]
+    client_id = os.environ["SPOTIFY_CLIENT_ID"]
     assert client_id
     client_secret = os.environ["SPOTIFY_CLIENT_SECRET"]
     assert client_secret

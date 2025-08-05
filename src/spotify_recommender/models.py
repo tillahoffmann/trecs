@@ -3,8 +3,8 @@ from typing import Literal
 
 
 class Track(BaseModel):
-    """Track as presented in the Spotify Million Playlist dataset.
-    """
+    """Track as presented in the Spotify Million Playlist dataset."""
+
     pos: int
     artist_name: str
     track_uri: str
