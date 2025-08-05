@@ -1,7 +1,7 @@
 import collectiontools
 import sqlite3
 from torch.utils.data import Dataset
-from typing import Any
+from typing import Any, Mapping
 
 
 SELECT_PLAYLISTS_BY_SPLIT = """
@@ -69,13 +69,16 @@ class Sqlite3Dataset(Dataset):
 
 
 def pad_batch(
-    batch: list[dict[str, Any]], fill_value: Any = None, length: int | None = None
+    batch: list[dict[str, Any]],
+    fill_value: Any | dict[str, Any] = None,
+    length: int | None = None,
 ) -> list[dict[str, Any]]:
     """Pad elements of a batch to a desired length.
 
     Args:
         batch: List of batch elements, each being a dictionary with list values.
-        fill_value: Value to pad with.
+        fill_value: Value to pad with or a mapping from keys in each element of the
+            batch to a fill value.
         length: Length to pad to or :code:`None` to pad to the longest sequence in the
             batch.
 
@@ -86,7 +89,9 @@ def pad_batch(
         length = max(max(map(len, element.values())) for element in batch)
     return [
         {
-            key: value + [fill_value] * (length - len(value))
+            key: value
+            + [fill_value[key] if isinstance(fill_value, Mapping) else fill_value]
+            * (length - len(value))
             for key, value in element.items()
         }
         for element in batch

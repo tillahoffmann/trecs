@@ -119,6 +119,11 @@ def test_pad_batch(example_batch: Batch) -> None:
     lengths = [len(element["a"]) for element in padded]
     assert lengths == [5, 5, 7]
 
+    padded = pad_batch(example_batch, {"a": 99, "b": 77})
+    element = padded[0]
+    assert element["a"] == [0, 1, 2, 99, 99, 99, 99]
+    assert element["b"] == [10, 11, 12, 77, 77, 77, 77]
+
 
 def test_truncate_batch(example_batch: Batch) -> None:
     truncated = truncate_batch(example_batch, 4)
