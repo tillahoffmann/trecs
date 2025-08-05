@@ -3,10 +3,11 @@ from pathlib import Path
 import pytest
 import spotify_recommender
 from spotify_recommender.data import (
+    Encoder,
     pad_batch,
-    truncate_batch,
-    Sqlite3Dataset,
     SELECT_PLAYLISTS_BY_SPLIT,
+    Sqlite3Dataset,
+    truncate_batch,
 )
 import sqlite3
 from typing import Any, Generator
@@ -148,3 +149,18 @@ def test_sqlite3_dataset(example_conn: sqlite3.Connection, split: str) -> None:
     for i, playlist_id in enumerate(dataset._idx):
         element = dataset[i]
         assert all(x == playlist_id for x in element["playlist_id"])
+
+
+def test_encoder(tmp_path: Path) -> None:
+    encoder = Encoder("abc")
+    assert encoder["c"] == 2
+    with pytest.raises(KeyError):
+        encoder["d"]
+
+    encoder = Encoder("abc", on_unknown="default", default="b")
+    assert encoder["d"] == encoder["b"]
+
+    path = tmp_path / "encoder.pkl"
+    encoder.to_pickle(path)
+    encoder = Encoder.from_pickle(path)
+    assert encoder["d"] == encoder["b"]

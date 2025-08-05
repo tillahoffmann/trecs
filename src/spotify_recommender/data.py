@@ -1,7 +1,10 @@
 import collectiontools
+from pathlib import Path
+import pickle
 import sqlite3
 from torch.utils.data import Dataset
-from typing import Any, Mapping
+from typing import Any, Iterable, Iterator, Literal, Mapping, Self
+from .util import safe_write
 
 
 SELECT_PLAYLISTS_BY_SPLIT = """
@@ -113,3 +116,67 @@ def truncate_batch(
     return [
         {key: value[:max_length] for key, value in element.items()} for element in batch
     ]
+
+
+class Encoder(Mapping):
+    """Encoder that maps from arbitrary identifiers to consecutive integers.
+
+    Args:
+        lookup: Lookup table or sequence of tokens to encode.
+        on_unknown: Whether to use a default value or raise an exception.
+        default: Default token if not found in the lookup table. E.g., if the default is
+            '<UNK>', then an element not in the lookup table will be encoded *as the
+            integer* representing the '<UNK>' token.
+    """
+
+    def __init__(
+        self,
+        lookup: Mapping | Iterable,
+        on_unknown: Literal["raise", "default"] = "raise",
+        default: Any = None,
+    ) -> None:
+        if isinstance(lookup, Iterable) and not isinstance(lookup, Mapping):
+            lookup = {key: i for i, key in enumerate(lookup)}
+        if on_unknown == "default" and default not in lookup:
+            raise ValueError(f"Default '{default}' is not in the lookup.")
+
+        self.lookup = lookup
+        self.on_unknown = on_unknown
+        self.default = default
+
+    def __repr__(self):
+        default = "raises KeyError" if self.on_unknown == "raise" else self.default
+        return f"<Encoder with {len(self.lookup):,} tokens, default: {default}>"
+
+    def __getitem__(self, key: Any) -> Any:
+        try:
+            return self.lookup[key]
+        except KeyError:
+            if self.on_unknown == "raise":
+                raise
+            return self.lookup[self.default]
+
+    def __len__(self) -> int:
+        return len(self.lookup)
+
+    def __iter__(self) -> Iterator:
+        raise NotImplementedError("Iteration is not implemented for token encoders.")
+
+    def to_pickle(self, path: str | Path) -> None:
+        """Save an encoder to a pickle file."""
+        with safe_write(path, mode="wb") as fp:
+            pickle.dump(
+                {
+                    "lookup": self.lookup,
+                    "on_unknown": self.on_unknown,
+                    "default": self.default,
+                },
+                fp,
+            )
+
+    @classmethod
+    def from_pickle(cls, path: str | Path) -> Self:
+        """Load an encoder from a pickle file."""
+        with open(path, mode="rb") as fp:
+            state = pickle.load(fp)
+        return cls(**state)
