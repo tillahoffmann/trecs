@@ -32,8 +32,8 @@ CREATE TABLE tracks (
     speechiness REAL,
     tempo REAL,
     time_signature REAL,
-);
     valence REAL
+);
 
 CREATE TABLE playlists (
     -- We use the explicit `pid` from the MPD dataset.
@@ -64,5 +64,12 @@ CREATE TABLE splits (
 CREATE TABLE split_playlist_memberships(
     id INTEGER PRIMARY KEY,
     split_id INTEGER NOT NULL REFERENCES splits(id),
-    playlist_id INTEGER NOT NULL REFERENCES playlists(id)
+    -- This is UNIQUE because playlists cannot be in two different splits.
+    playlist_id INTEGER UNIQUE NOT NULL REFERENCES playlists(id)
 );
+
+-- Index for JOINs between splits and split_playlist_memberships.
+CREATE INDEX idx_spm_split_id ON split_playlist_memberships(split_id);
+
+-- Index for JOINs between split_playlist_memberships and playlist_track_memberships.
+CREATE INDEX idx_ptm_playlist_id ON playlist_track_memberships(playlist_id);
