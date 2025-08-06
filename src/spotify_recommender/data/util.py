@@ -1,4 +1,6 @@
 import collectiontools
+import grain
+import itertools
 from pathlib import Path
 import pickle
 import sqlite3
@@ -12,6 +14,18 @@ FROM splits
 INNER JOIN split_playlist_memberships
 ON splits.id = split_playlist_memberships.split_id
 WHERE splits.name = :split
+ORDER BY split_playlist_memberships.playlist_id
+"""
+
+SELECT_DISTINCT_TRACK_IDS_BY_SPLIT = """
+SELECT DISTINCT track_id
+FROM playlist_track_memberships AS ptm
+INNER JOIN split_playlist_memberships AS spm
+ON ptm.playlist_id = spm.playlist_id
+INNER JOIN splits
+ON splits.id = spm.split_id
+WHERE splits.name = 'train'
+ORDER BY track_id
 """
 
 
@@ -130,11 +144,11 @@ class Encoder(Mapping):
 
     def __init__(
         self,
-        lookup: Mapping | Iterable,
+        lookup: dict | Iterable,
         on_unknown: Literal["raise", "default"] = "raise",
         default: Any = None,
     ) -> None:
-        if isinstance(lookup, Iterable) and not isinstance(lookup, Mapping):
+        if isinstance(lookup, Iterable) and not isinstance(lookup, dict):
             lookup = {key: i for i, key in enumerate(lookup)}
         if on_unknown == "default" and default not in lookup:
             raise ValueError(f"Default '{default}' is not in the lookup.")
@@ -142,6 +156,13 @@ class Encoder(Mapping):
         self.lookup = lookup
         self.on_unknown = on_unknown
         self.default = default
+
+    def add(self, token) -> int:
+        return self.lookup.setdefault(token, len(self.lookup))
+
+    def update(self, tokens) -> None:
+        for token in tokens:
+            self.add(token)
 
     def __repr__(self):
         default = "raises KeyError" if self.on_unknown == "raise" else self.default
@@ -179,3 +200,28 @@ class Encoder(Mapping):
         with open(path, mode="rb") as fp:
             state = pickle.load(fp)
         return cls(**state)
+
+
+class BatchTransform:
+    """Batch elements like :class:`grain._src.python.operations.BatchOperation`,
+    although each batch is a list of arbitrary elements.
+
+    Args:
+        size: Batch size.
+        on_short: What to do if the last batch is short.
+    """
+
+    def __init__(
+        self, size: int, on_short: Literal["keep", "drop", "raise"] = "keep"
+    ) -> None:
+        self.size = size
+        self.on_short = on_short
+
+    def __call__(self, iterable):
+        for batch in itertools.batched(
+            iterable, self.size, strict=self.on_short == "raise"
+        ):
+            if len(batch) == self.size or self.on_short == "keep":
+                yield grain.Record(
+                    batch[-1].metadata.remove_record_key(), data=[x.data for x in batch]
+                )
