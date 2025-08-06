@@ -6,6 +6,8 @@ from .util import (
     SELECT_DISTINCT_TRACK_IDS_BY_SPLIT,
     Sqlite3Dataset,
     truncate_batch,
+    LambdaMap,
+    LambdaRandomMap,
 )
 
 
@@ -17,4 +19,6 @@ __all__ = [
     "SELECT_DISTINCT_TRACK_IDS_BY_SPLIT",
     "Sqlite3Dataset",
     "truncate_batch",
+    "LambdaMap",
+    "LambdaRandomMap",
 ]

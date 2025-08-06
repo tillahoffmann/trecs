@@ -1,11 +1,27 @@
 import collectiontools
 import grain
 import itertools
+from numpy.random import Generator
 from pathlib import Path
 import pickle
 import sqlite3
-from typing import Any, Iterable, Iterator, Literal, Mapping, Self
+import threading
+from typing import (
+    Any,
+    Callable,
+    Concatenate,
+    Generic,
+    Iterable,
+    Iterator,
+    Literal,
+    Mapping,
+    Self,
+    TypeVar,
+)
 from ..util import safe_write
+
+T = TypeVar("T")
+U = TypeVar("U")
 
 
 SELECT_PLAYLISTS_BY_SPLIT = """
@@ -24,7 +40,7 @@ INNER JOIN split_playlist_memberships AS spm
 ON ptm.playlist_id = spm.playlist_id
 INNER JOIN splits
 ON splits.id = spm.split_id
-WHERE splits.name = 'train'
+WHERE splits.name = :split
 ORDER BY track_id
 """
 
@@ -46,7 +62,7 @@ class Sqlite3Dataset:
 
     def __init__(
         self,
-        conn: sqlite3.Connection,
+        conn: sqlite3.Connection | str | Path,
         idx_query: str,
         data_query: str,
         idx_parameters: dict[str, Any] | None = None,
@@ -61,12 +77,26 @@ class Sqlite3Dataset:
 
         self._idx: list[Any] | None = None
         self._columns: list[str] | None = None
+        self._local = threading.local()
+
+    def _get_conn(self) -> sqlite3.Connection:
+        # Just return the connection if one was explicitly passed.
+        if isinstance(self.conn, sqlite3.Connection):
+            return self.conn
+        try:
+            return self._local.conn
+        except AttributeError:
+            self._local.conn = sqlite3.connect(self.conn)
+            return self._local.conn
 
     @property
     def idx(self) -> list[Any]:
         if self._idx is None:
             self._idx = [
-                id for (id,) in self.conn.execute(self.idx_query, self.idx_parameters)
+                id
+                for (id,) in self._get_conn().execute(
+                    self.idx_query, self.idx_parameters
+                )
             ]
         return self._idx
 
@@ -76,7 +106,7 @@ class Sqlite3Dataset:
     def __getitem__(self, key) -> dict[str, list[Any]]:
         id = self.idx[key]
         parameters = {"id": id} | self.data_parameters
-        cursor = self.conn.execute(self.data_query, parameters)
+        cursor = self._get_conn().execute(self.data_query, parameters)
         if self._columns is None:
             self._columns = [column for (column, *_) in cursor.description]
         return collectiontools.transpose_to_dict(
@@ -176,6 +206,9 @@ class Encoder(Mapping):
                 raise
             return self.lookup[self.default]
 
+    def __call__(self, key: Any) -> Any:
+        return self[key]
+
     def __len__(self) -> int:
         return len(self.lookup)
 
@@ -225,3 +258,43 @@ class BatchTransform:
                 yield grain.Record(
                     batch[-1].metadata.remove_record_key(), data=[x.data for x in batch]
                 )
+
+
+class BatchMapTransform(grain.transforms.Map):
+    """Apply a function to elements of a batch."""
+
+    def __init__(self, func: Callable, *args, **kwargs) -> None:
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+
+    def map(self, element):  # pyright: ignore[reportIncompatibleMethodOverride]
+        return [self.func(x, *self.args, **self.kwargs) for x in element]
+
+
+class LambdaRandomMap(grain.transforms.RandomMap, Generic[T, U]):
+    """Apply a callable to all elements of a map, receiving a random number generator."""
+
+    def __init__(
+        self, func: Callable[Concatenate[T, Generator, ...], U], *args, **kwargs
+    ) -> None:
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+
+    def random_map(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, element: T, rng: Generator
+    ) -> U:
+        return self.func(element, rng, *self.args, **self.kwargs)
+
+
+class LambdaMap(grain.transforms.Map, Generic[T, U]):
+    """Apply a callable to all elements of a map."""
+
+    def __init__(self, func: Callable[Concatenate[T, ...], U], *args, **kwargs) -> None:
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+
+    def map(self, element: T) -> U:  # pyright: ignore[reportIncompatibleMethodOverride]
+        return self.func(element, *self.args, **self.kwargs)
