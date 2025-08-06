@@ -2,7 +2,6 @@ import collectiontools
 from pathlib import Path
 import pickle
 import sqlite3
-from torch.utils.data import Dataset
 from typing import Any, Iterable, Iterator, Literal, Mapping, Self
 from ..util import safe_write
 
@@ -16,7 +15,7 @@ WHERE splits.name = :split
 """
 
 
-class Sqlite3Dataset(Dataset):
+class Sqlite3Dataset:
     """Dataset from a sqlite database. Each element is a dictionary keyed by the column
     names of the :attr:`data_query`.
 
