@@ -77,7 +77,9 @@ def _create_decoder(args: _Args, rngs: nnx.Rngs, num_tracks: int) -> PlaylistDec
 
 
 def _create_optimizer(args: _Args, model: PlaylistDecoder) -> nnx.Optimizer:
-    return nnx.Optimizer(model, optax.adamw(args.learning_rate), wrt=nnx.Param)
+    return nnx.Optimizer(
+        model, optax.adamw(args.learning_rate, weight_decay=0.01), wrt=nnx.Param
+    )
 
 
 def encode_track_ids(batch: dict, encoder: Encoder):
@@ -184,7 +186,7 @@ def __main__(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--resume", help="Resume training.", action="store_true")
     parser.add_argument(
-        "--learning-rate", help="Optimizer learning rate", type=float, default=1e-3
+        "--learning-rate", help="Optimizer learning rate", type=float, default=5e-4
     )
     parser.add_argument(
         "--encoder",
