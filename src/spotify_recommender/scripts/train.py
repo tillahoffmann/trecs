@@ -70,7 +70,7 @@ def _create_decoder(args: _Args, rngs: nnx.Rngs, num_tracks: int) -> PlaylistDec
         num_heads=args.num_heads,
         num_features=args.num_features,
         num_hidden=args.num_hidden,
-        dropout=args.num_hidden,
+        dropout=args.dropout,
         rngs=rngs,
         num_tracks=num_tracks,
     )
