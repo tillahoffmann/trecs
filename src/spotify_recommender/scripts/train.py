@@ -233,10 +233,10 @@ def __main__(argv: list[str] | None = None) -> None:
     if args.num_steps:
         num_steps = args.num_steps
     elif args.num_epochs:
-        num_steps = int(args.num_epochs * len(datasets["train"]))
+        num_steps = int(args.num_epochs * len(datasets["train"]) / args.batch_size)
     else:
         # Run one epoch by default.
-        num_steps = len(datasets["train"])
+        num_steps = int(len(datasets["train"]) / args.batch_size)
 
     # Encoder for turning ids into consecutive integers for indexing embeddings.
     # Building the encoder can be expensive because we need to find all the tracks in
