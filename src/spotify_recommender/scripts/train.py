@@ -5,6 +5,7 @@ import grain
 import jax
 from jax import numpy as jnp
 import optax
+from orbax import checkpoint as ocp
 from pathlib import Path
 import pickle
 import sqlite3
@@ -146,6 +147,91 @@ def train_step(
     return loss
 
 
+def checkpoint_training_state(
+    checkpoint_manager: ocp.CheckpointManager,
+    step: int,
+    *,
+    model: nnx.Module,
+    optimizer: nnx.Optimizer,
+    metrics,
+    train_data_iter,
+    valid_data_iter,
+    loss_rngs,
+):
+    nnx_items = {
+        "model": model,
+        "loss_rngs": loss_rngs,
+        "optimizer": optimizer,
+        "my-metrics": metrics,
+    }
+    nnx_args = {
+        key: ocp.args.PyTreeSave(nnx.state(value))  # pyright: ignore[reportCallIssue]
+        for key, value in nnx_items.items()
+    }
+    checkpoint_manager.save(
+        step,
+        args=ocp.args.Composite(
+            train_data_iter=grain.checkpoint.CheckpointSave(  # pyright: ignore[reportCallIssue]
+                train_data_iter  # pyright: ignore[reportCallIssue]
+            ),
+            valid_data_iter=grain.checkpoint.CheckpointSave(  # pyright: ignore[reportCallIssue]
+                valid_data_iter  # pyright: ignore[reportCallIssue]
+            ),
+            **nnx_args,
+        ),
+    )
+    checkpoint_manager.wait_until_finished()
+
+
+def restore_training_state(
+    checkpoint_manager: ocp.CheckpointManager,
+    step: int | None = None,
+    *,
+    model: nnx.Module,
+    optimizer: nnx.Optimizer,
+    metrics,
+    train_data_iter,
+    valid_data_iter,
+    loss_rngs,
+) -> dict:
+    nnx_items = {
+        "model": model,
+        "loss_rngs": loss_rngs,
+        "optimizer": optimizer,
+        "my-metrics": metrics,  # BUG: You cannot save a field called metrics.
+    }
+    nnx_splits = {key: nnx.split(value) for key, value in nnx_items.items()}
+    nnx_args = {
+        key: ocp.args.PyTreeRestore(state)  # pyright: ignore[reportCallIssue]
+        for key, (_, state) in nnx_splits.items()
+    }
+
+    # Restore state.
+    restored = checkpoint_manager.restore(
+        step,
+        args=ocp.args.Composite(
+            train_data_iter=grain.checkpoint.CheckpointRestore(  # pyright: ignore[reportCallIssue]
+                train_data_iter  # pyright: ignore[reportCallIssue]
+            ),
+            valid_data_iter=grain.checkpoint.CheckpointRestore(  # pyright: ignore[reportCallIssue]
+                valid_data_iter  # pyright: ignore[reportCallIssue]
+            ),
+            **nnx_args,
+        ),
+    )
+
+    # Reassemble graph def and state and return.
+    nnx_items = {
+        key: nnx.merge(graphdef, getattr(restored, key))
+        for key, (graphdef, _) in nnx_splits.items()
+    }
+    return {
+        "train_data_iter": train_data_iter,
+        "valid_data_iter": valid_data_iter,
+        **nnx_items,
+    }
+
+
 def __main__(argv: list[str] | None = None) -> None:
     parser = ArgumentParser()
     parser.add_argument(
@@ -277,23 +363,8 @@ def __main__(argv: list[str] | None = None) -> None:
         )
     num_tokens = len(track_encoder)
 
-    # Construct the model.
-    if args.resume:
-        raise NotImplementedError
-    else:
-        # Set up all state.
-        model = _create_decoder(args, nnx.Rngs(args.seed), num_tokens)
-        optimizer = _create_optimizer(args, model)
-        # We don't use a multi-metric because it requires we specify a value every time.
-        # We may not want to do that, e.g., when we advance the step but not the epoch.
-        metrics = {
-            "step": Counter(),
-            "epoch": Counter(),
-        }
-        # Random number generator for sampled softmax.
-        softmax_rngs = nnx.Rngs(args.seed + 1)
-
-    # Data loaders are stateful and must be checkpointed for reproducibility.
+    # Datasets have some state, but they should be reproducible over different runs.
+    # Unlike the samplers, we do not need to checkpoint them.
     operations = [
         BatchTransform(args.batch_size, on_short="drop"),
         LambdaMap(truncate_batch, max_length=args.context_length),
@@ -311,45 +382,102 @@ def __main__(argv: list[str] | None = None) -> None:
                 shuffle=True,
                 # Create a seed based on the split name and the specified seed.
                 seed=int.from_bytes(split.encode()) & (2**32 - 1) + args.seed,
-                # Only run one epoch at a time.
-                num_epochs=1 if split == "train" else None,
             ),
             operations=operations,
             worker_count=0,
         )
         for split, dataset in datasets.items()
     }
+    data_iters = {key: iter(value) for key, value in data_loaders.items()}
 
+    # Create metrics and random number generator state. Their state will be restored
+    # if we're loading from a checkpoint. We handle model and optimizer differently
+    # below because just instantiating the model to infer the abstract pytree
+    # representation can be very expensive.
+    metrics = {
+        "step": Counter(),
+        "epoch": Counter(),
+    }
+    loss_rngs = nnx.Rngs(args.seed + 1)
+
+    # Create a checkpoint manager which we'll use to persist model weights, data loader
+    # state, and the rng used for sampled softmax.
     with (
-        tqdm(total=num_steps, initial=int(metrics["step"].compute())) as progress,
+        ocp.CheckpointManager(
+            args.output / "checkpoints",
+            item_names=(
+                "loss_rngs",
+                "my-metrics",
+                "model",
+                "optimizer",
+                "train_data_iter",
+                "valid_data_iter",
+            ),
+            options=ocp.CheckpointManagerOptions(
+                preservation_policy=ocp.checkpoint_managers.LatestN(5)
+            ),
+        ) as checkpoint_manager,
+        tqdm(total=num_steps) as progress,
         SummaryWriter(str(args.output / "logdir")) as writer,
     ):
-        train_batches = iter(data_loaders["train"])
-        # This one will repeat indefinitely because we passed num_epochs=None for the
-        # validation sampler.
-        valid_batches = iter(data_loaders["valid"])
+
+        # Construct the model or load it from the checkpoint.
+        if args.resume:
+            model = nnx.eval_shape(
+                lambda: _create_decoder(args, nnx.Rngs(args.seed), num_tokens)
+            )
+            optimizer = nnx.eval_shape(lambda: _create_optimizer(args, model))
+            training_state = restore_training_state(
+                checkpoint_manager,
+                metrics=metrics,
+                loss_rngs=nnx.Rngs(0),
+                model=model,
+                optimizer=optimizer,
+                valid_data_iter=data_iters["valid"],
+                train_data_iter=data_iters["train"],
+            )
+            model = training_state["model"]
+            optimizer = training_state["optimizer"]
+            loss_rngs = training_state["loss_rngs"]
+            metrics = training_state["my-metrics"]
+            progress.n = int(metrics["step"].compute())
+        else:
+            # Set up all state.
+            model = _create_decoder(args, nnx.Rngs(args.seed), num_tokens)
+            optimizer = _create_optimizer(args, model)
+
         valid_loss = jnp.nan
         while (step := int(metrics["step"].compute())) < num_steps:
-            # Try to get a new batch. If the iterator is exhausted, create a new one and
-            # restart the loop.
-            try:
-                inputs, labels = next(train_batches)
-            except StopIteration:
-                train_batches = iter(data_loaders["train"])
-                metrics["epoch"].update()
-                continue
-
             # Apply a training step.
+            inputs, labels = next(data_iters["train"])
             train_loss = train_step(
-                model, optimizer, inputs, labels, softmax_rngs(), track_encoder["<EOP>"]
+                model,
+                optimizer,
+                inputs,
+                labels,
+                loss_rngs(),
+                track_encoder["<EOP>"],
             )
             writer.add_scalar("train_loss", train_loss, global_step=step)
 
+            # Checkpoint the model if it's time.
+            if step % args.checkpoint_every == 0:
+                checkpoint_training_state(
+                    checkpoint_manager,
+                    step,
+                    model=model,
+                    train_data_iter=data_iters["train"],
+                    valid_data_iter=data_iters["valid"],
+                    loss_rngs=loss_rngs,
+                    metrics=metrics,
+                    optimizer=optimizer,
+                )
+
             # Evaluate the training loss if it's time.
             if step % args.valid_every == 0:
-                inputs, labels = next(valid_batches)
+                inputs, labels = next(data_iters["valid"])
                 valid_loss = loss_fn(
-                    model, inputs, labels, softmax_rngs(), track_encoder["<EOP>"]
+                    model, inputs, labels, loss_rngs(), track_encoder["<EOP>"]
                 )
                 writer.add_scalar("valid_loss", valid_loss, global_step=step)
 
@@ -358,6 +486,18 @@ def __main__(argv: list[str] | None = None) -> None:
             progress.set_description(
                 f"train-loss={train_loss:.2f}, valid-loss={valid_loss:.2f}"
             )
+
+        # Checkpoint after training finishes.
+        checkpoint_training_state(
+            checkpoint_manager,
+            step,
+            model=model,
+            train_data_iter=data_iters["train"],
+            valid_data_iter=data_iters["valid"],
+            loss_rngs=loss_rngs,
+            metrics=metrics,
+            optimizer=optimizer,
+        )
 
 
 if __name__ == "__main__":
