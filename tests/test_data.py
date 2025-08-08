@@ -48,7 +48,7 @@ def test_truncate_batch(example_batch: Batch) -> None:
 
 
 def test_sqlite3_dataset(example_conn: sqlite3.Connection) -> None:
-    for split, expected_size in {"train": 79, "test": 10, "valid": 10}.items():
+    for split, expected_size in {"train": 80, "test": 10, "valid": 10}.items():
         dataset = Sqlite3Dataset(
             example_conn,
             SELECT_PLAYLISTS_BY_SPLIT,

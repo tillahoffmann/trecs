@@ -43,7 +43,7 @@ def maybe_insert_entity(
     assert (
         rowid is not None
     ), f"Inserting '{data}' into '{table}' did not yield a row id."
-    if key:
+    if key is not None:
         assert lookup is not None, "We should never get here."
         lookup[key] = rowid
     return rowid
@@ -145,7 +145,9 @@ def insert_slices(conn: sqlite3.Connection, slice_paths: list[Path]) -> list[int
             assert len(unique_artists) == playlist.num_artists
             assert len(unique_albums) == playlist.num_albums
 
-    return list(playlist_id_lookup.values())
+    # Return the row ids sorted by the playist id (pid) so the order is the same
+    # irrespective if how the filenames are ordered in the command line arguments.
+    return [rowid for _, rowid in sorted(playlist_id_lookup.items())]
 
 
 def insert_splits(

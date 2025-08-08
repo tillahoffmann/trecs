@@ -21,7 +21,9 @@ def test_build_db(tmp_path: Path) -> None:
             ORDER BY splits.name
         """
         ).fetchall()
-        assert data == [("test", 10), ("train", 79), ("valid", 10)]
+        assert data == [("test", 10), ("train", 80), ("valid", 10)]
+        (total,) = conn.execute("SELECT COUNT(*) FROM playlists").fetchone()
+        assert total == 100
 
         # All tables must have something in them.
         tables = [
