@@ -47,24 +47,24 @@ def test_truncate_batch(example_batch: Batch) -> None:
     assert lengths == [3, 4, 4]
 
 
-@pytest.mark.parametrize("split", ["train", "test", "valid"])
-def test_sqlite3_dataset(example_conn: sqlite3.Connection, split: str) -> None:
-    dataset = Sqlite3Dataset(
-        example_conn,
-        SELECT_PLAYLISTS_BY_SPLIT,
-        """
-        SELECT playlist_id, track_id, pos
-        FROM playlist_track_memberships
-        WHERE playlist_id = :id
-        """,
-        {"split": split},
-    )
-    # These numbers depend on the random number generator in `conftest.py`.
-    assert {"train": 79, "test": 10, "valid": 10}[split] == len(dataset)
-    assert dataset._idx
-    for i, playlist_id in enumerate(dataset._idx):
-        element = dataset[i]
-        assert all(x == playlist_id for x in element["playlist_id"])
+def test_sqlite3_dataset(example_conn: sqlite3.Connection) -> None:
+    for split, expected_size in {"train": 79, "test": 10, "valid": 10}.items():
+        dataset = Sqlite3Dataset(
+            example_conn,
+            SELECT_PLAYLISTS_BY_SPLIT,
+            """
+            SELECT playlist_id, track_id, pos
+            FROM playlist_track_memberships
+            WHERE playlist_id = :id
+            """,
+            {"split": split},
+        )
+        # These numbers depend on the random number generator in `conftest.py`.
+        assert expected_size == len(dataset)
+        assert dataset._idx
+        for i, playlist_id in enumerate(dataset._idx):
+            element = dataset[i]
+            assert all(x == playlist_id for x in element["playlist_id"])
 
 
 def test_encoder(tmp_path: Path) -> None:
