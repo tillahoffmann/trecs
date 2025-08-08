@@ -427,7 +427,7 @@ def __main__(argv: list[str] | None = None) -> None:
     # state, and the rng used for sampled softmax.
     with (
         ocp.CheckpointManager(
-            args.output / "checkpoints",
+            (args.output / "checkpoints").resolve(),
             item_names=(
                 "loss_rngs",
                 "my-metrics",
