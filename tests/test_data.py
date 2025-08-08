@@ -60,7 +60,7 @@ def test_sqlite3_dataset(example_conn: sqlite3.Connection, split: str) -> None:
         {"split": split},
     )
     # These numbers depend on the random number generator in `conftest.py`.
-    assert {"train": 36, "test": 4, "valid": 11}[split] == len(dataset)
+    assert {"train": 79, "test": 10, "valid": 10}[split] == len(dataset)
     assert dataset._idx
     for i, playlist_id in enumerate(dataset._idx):
         element = dataset[i]

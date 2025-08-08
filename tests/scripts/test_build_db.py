@@ -22,3 +22,16 @@ def test_build_db(tmp_path: Path) -> None:
         """
         ).fetchall()
         assert data == [("test", 10), ("train", 79), ("valid", 10)]
+
+        # All tables must have something in them.
+        tables = [
+            "albums",
+            "artists",
+            "playlist_track_memberships",
+            "split_playlist_memberships",
+            "splits",
+            "tracks",
+        ]
+        for table in tables:
+            (count,) = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()
+            assert count, f"'{table}' is empty."

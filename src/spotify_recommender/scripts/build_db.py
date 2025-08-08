@@ -132,6 +132,13 @@ def insert_slices(conn: sqlite3.Connection, slice_paths: list[Path]) -> list[int
                     }
                 )
 
+            conn.executemany(
+                """
+                INSERT INTO playlist_track_memberships (playlist_id, pos, track_id)
+                VALUES (:playlist_id, :pos, :track_id)
+                """,
+                playlist_track_memberships,
+            )
             assert len(playlist.tracks) == playlist.num_tracks
             assert total_duration_ms == playlist.duration_ms
             assert len(unique_artists) == playlist.num_artists
@@ -202,3 +209,7 @@ def __main__(argv: list[str] | None = None) -> None:
         playlist_ids = insert_slices(conn, args.slices)
         insert_splits(conn, split_fracs, playlist_ids, args.seed)
         conn.commit()
+
+
+if __name__ == "__main__":
+    __main__()
