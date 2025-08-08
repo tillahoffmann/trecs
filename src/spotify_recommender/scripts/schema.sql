@@ -81,8 +81,17 @@ CREATE TABLE split_playlist_memberships(
     playlist_id INTEGER UNIQUE NOT NULL REFERENCES playlists(id)
 );
 
+/*
+Adding these indices is important for querying. But if we create them BEFORE data
+insertion, that can really slow down the insertion because the index needs to be
+rebuilt. So we wrap them in delimiters here and will create them AFTER having inserted
+the data. This is dirty. But it does the trick.
+
+<INDICES>
 -- Index for JOINs between splits and split_playlist_memberships.
 CREATE INDEX idx_spm_split_id ON split_playlist_memberships(split_id);
-
 -- Index for JOINs between split_playlist_memberships and playlist_track_memberships.
 CREATE INDEX idx_ptm_playlist_id ON playlist_track_memberships(playlist_id);
+</INDICES>
+
+*/

@@ -2,6 +2,7 @@ from argparse import ArgumentParser
 from contextlib import closing
 import numpy
 from pathlib import Path
+import re
 import sqlite3
 from tqdm import tqdm
 from typing import cast, Hashable
@@ -206,8 +207,15 @@ def __main__(argv: list[str] | None = None) -> None:
         schema = schema_path.read_text()
         conn.executescript(schema)
 
+        # Insert all the data.
         playlist_ids = insert_slices(conn, args.slices)
         insert_splits(conn, split_fracs, playlist_ids, args.seed)
+        conn.commit()
+
+        # Create indices for fast queries. See the schema file for details.
+        _, index_sql, _ = re.split(r"</?INDICES>", schema)
+        conn.executescript(index_sql)
+        # I don't think we need this, but can't hurt.
         conn.commit()
 
 
