@@ -44,6 +44,8 @@ class _Args:
     num_epochs: int | None
     num_steps: int | None
     encoder: Path | None
+    checkpoint_every: int
+    valid_every: int
 
 
 class Counter(nnx.Metric):
@@ -182,7 +184,16 @@ def __main__(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--batch-size", type=int, help="Batch size.", default=8)
     parser.add_argument(
-        "--checkpoint-every", help="Checkpoint every x number of steps.", default=1_000
+        "--checkpoint-every",
+        help="Checkpoint every x number of steps.",
+        default=1_000,
+        type=int,
+    )
+    parser.add_argument(
+        "--valid-every",
+        help="Evaluate validation loss every x number of steps.",
+        default=100,
+        type=int,
     )
     parser.add_argument("--resume", help="Resume training.", action="store_true")
     parser.add_argument(
@@ -301,7 +312,7 @@ def __main__(argv: list[str] | None = None) -> None:
                 # Create a seed based on the split name and the specified seed.
                 seed=int.from_bytes(split.encode()) & (2**32 - 1) + args.seed,
                 # Only run one epoch at a time.
-                num_epochs=1,
+                num_epochs=1 if split == "train" else None,
             ),
             operations=operations,
             worker_count=0,
@@ -313,16 +324,19 @@ def __main__(argv: list[str] | None = None) -> None:
         tqdm(total=num_steps, initial=int(metrics["step"].compute())) as progress,
         SummaryWriter(str(args.output / "logdir")) as writer,
     ):
-        valid_loss = jnp.nan
         train_batches = iter(data_loaders["train"])
+        # This one will repeat indefinitely because we passed num_epochs=None for the
+        # validation sampler.
+        valid_batches = iter(data_loaders["valid"])
+        valid_loss = jnp.nan
         while (step := int(metrics["step"].compute())) < num_steps:
             # Try to get a new batch. If the iterator is exhausted, create a new one and
             # restart the loop.
             try:
                 inputs, labels = next(train_batches)
-                metrics["epoch"].update()
             except StopIteration:
                 train_batches = iter(data_loaders["train"])
+                metrics["epoch"].update()
                 continue
 
             # Apply a training step.
@@ -330,6 +344,14 @@ def __main__(argv: list[str] | None = None) -> None:
                 model, optimizer, inputs, labels, softmax_rngs(), track_encoder["<EOP>"]
             )
             writer.add_scalar("train_loss", train_loss, global_step=step)
+
+            # Evaluate the training loss if it's time.
+            if step % args.valid_every == 0:
+                inputs, labels = next(valid_batches)
+                valid_loss = loss_fn(
+                    model, inputs, labels, softmax_rngs(), track_encoder["<EOP>"]
+                )
+                writer.add_scalar("valid_loss", valid_loss, global_step=step)
 
             metrics["step"].update()
             progress.update()
