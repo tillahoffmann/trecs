@@ -27,6 +27,9 @@ class Playlist(BaseModel):
     num_tracks: int
     num_albums: int
     num_followers: int
+    num_edits: int
+    duration_ms: int
+    num_artists: int
     tracks: list[Track]
 
 

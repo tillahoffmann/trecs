@@ -12,7 +12,7 @@ The recommender comprises three parts:
 
 This architecture is motivated by:
 
-* Commerical models are great at chatting, and there is no need to reinvent the wheel—nor could we. We need this chat interface to meet user expectations. The tool call is our way to translate between the conversation and a semantic representation of the user preferences.
+* Commercial models are great at chatting, and there is no need to reinvent the wheel—nor could we. We need this chat interface to meet user expectations. The tool call is our way to translate between the conversation and a semantic representation of the user preferences.
 * Pretrained encoders already have a good understanding of general cultural context and generate meaningful semantic representations. Using a tool call to generate the description decouples the user interaction from the textual representation that will serve as input to condition a decoder on. This means we can easily swap out different components of the system without re-training. Even swapping out the chat agent or modifying its prompt is acceptable provided the textual input to the encoder has the same semantics.
 * The decoder can be pretrained on a large playlist dataset without needing `(description_embedding, playlist)` pairs. We can then fine-tune the cross-attention layer on a smaller dataset with those pairs. This means swapping out the encoder requires re-training the decoder.
 
@@ -22,16 +22,7 @@ This architecture is motivated by:
 
 ## Data
 
-- Million playlist dataset from https://www.aicrowd.com/challenges/spotify-million-playlist-dataset-challenge
-- Audio feature vectors from:
-    1. https://github.com/rezaakb/spotify-recommender
-    2. https://www.kaggle.com/datasets/yamaerenay/spotify-dataset-19212020-600k-tracks
-    3. https://www.kaggle.com/datasets/rodolfofigueroa/spotify-12m-songs
-    4. https://www.kaggle.com/datasets/tomigelo/spotify-audio-features
-    5. https://github.com/rfordatascience/tidytuesday/tree/main/data/2020/2020-01-21
-    6. https://www.kaggle.com/datasets/theoverman/the-spotify-hit-predictor-dataset
-
-All of these data are stuck together into a single sqlite database (see [`schema.sql`](./src/spotify_recommender/schema.sql) for details) which only takes up less than two gigabytes. This database also contains tables to indicate the train-test split so we don't accidentally have leakage.
+The million playlist dataset from https://www.aicrowd.com/challenges/spotify-million-playlist-dataset-challenge. The data are stuck together into a single sqlite database (see [`schema.sql`](./src/spotify_recommender/schema.sql) and [`create_database.py`](./src/spotify_recommender/scripts/create_database.py) for details). This database also contains tables to indicate the train-test split so we don't accidentally have leakage and reproducible training.
 
 ## Training
 
@@ -49,8 +40,8 @@ Once the cross-attention layers have been trained, we may also want to fine tune
 
 ### Inference (what should be called prediction)
 
-We find the maximum-dot-product items in the database and filter them down based on hard constraints. Once we've identified the top-k items that meet the constraints, we sample from the softmax. This is equivalent to doing top-k sampling while also being efficient usign the nearest neighbor search.
+We find the maximum-dot-product items in the database and filter them down based on hard constraints. Once we've identified the top-k items that meet the constraints, we sample from the softmax. This is equivalent to doing top-k sampling while also being efficient using the nearest neighbor search.
 
 ### Next steps
 
-* Include artist and album embeddings, as well as the audio features. This can be achieved by having a dense network to generate the initial context vectors passed to the transformer. We want to make sure that there is an additive component to this network like a resnet because that naturally embeds the tracks, albums, and artists into the same space (or at least linear projections into the same space if they have different embedding dimensions).
+* Include artist and album embeddings. This can be achieved by having a dense network to generate the initial context vectors passed to the transformer. We want to make sure that there is an additive component to this network like a resnet because that naturally embeds the tracks, albums, and artists into the same space (or at least linear projections into the same space if they have different embedding dimensions).
