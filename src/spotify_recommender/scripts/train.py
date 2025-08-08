@@ -6,6 +6,7 @@ import jax
 from jax import numpy as jnp
 import optax
 from orbax import checkpoint as ocp
+import numpy
 from pathlib import Path
 import pickle
 import sqlite3
@@ -22,6 +23,7 @@ from ..data import (
     BatchTransform,
     Encoder,
     LambdaMap,
+    LambdaRandomMap,
 )
 from ..util import sampled_dot_cross_entropy_with_integer_labels
 
@@ -47,6 +49,7 @@ class _Args:
     encoder: Path | None
     checkpoint_every: int
     valid_every: int
+    unk_proba: float
 
 
 class Counter(nnx.Metric):
@@ -290,6 +293,12 @@ def __main__(argv: list[str] | None = None) -> None:
         type=Path,
         help="Path to a pickled encoder. Defaults to 'encoder.pkl' in the output directory.",
     )
+    parser.add_argument(
+        "--unk-proba",
+        type=float,
+        help="Probability of inserting '<UNK>' tokens into training data.",
+        default=0,
+    )
     parser.add_argument("input", type=Path, help="Sqlite3 database of playlists.")
     parser.add_argument("output", type=Path, help="Output directory.")
     args = cast(_Args, parser.parse_args(argv))
@@ -363,6 +372,17 @@ def __main__(argv: list[str] | None = None) -> None:
         )
     num_tokens = len(track_encoder)
 
+    # Randomly sample unknown tokens.
+    def f(element: dict, generator: numpy.random.Generator, proba: float | None):
+        if proba is None:
+            return element
+        return element | {
+            "track_id": [
+                "<UNK>" if generator.random() < proba else x
+                for x in element["track_id"]
+            ]
+        }
+
     # Datasets have some state, but they should be reproducible over different runs.
     # Unlike the samplers, we do not need to checkpoint them.
     operations = [
@@ -383,7 +403,10 @@ def __main__(argv: list[str] | None = None) -> None:
                 # Create a seed based on the split name and the specified seed.
                 seed=int.from_bytes(split.encode()) & (2**32 - 1) + args.seed,
             ),
-            operations=operations,
+            operations=[
+                LambdaRandomMap(f, proba=args.unk_proba if split == "train" else None),
+                *operations,
+            ],
             worker_count=0,
         )
         for split, dataset in datasets.items()
