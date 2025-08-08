@@ -113,6 +113,10 @@ class Sqlite3Dataset:
             [dict(zip(self._columns, row)) for row in cursor]
         )
 
+    def __repr__(self) -> str:
+        cls = self.__class__
+        return f"<{cls.__module__}.{cls.__name__} connected to '{self.conn}' with {len(self)} records>"
+
 
 def pad_batch(
     batch: list[dict[str, Any]],
