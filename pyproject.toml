@@ -34,3 +34,9 @@ dev = [
     "pytest-cov>=6.2.1",
     "scikit-learn>=1.7.1",
 ]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:Sharding info not provided when restoring. Populating sharding info from sharding file.:UserWarning"
+]
+addopts = "-v"
