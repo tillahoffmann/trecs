@@ -47,7 +47,7 @@ def test_truncate_batch(example_batch: Batch) -> None:
     assert lengths == [3, 4, 4]
 
 
-@pytest.mark.parametrize("split", ["train", "test"])
+@pytest.mark.parametrize("split", ["train", "test", "valid"])
 def test_sqlite3_dataset(example_conn: sqlite3.Connection, split: str) -> None:
     dataset = Sqlite3Dataset(
         example_conn,
@@ -59,7 +59,8 @@ def test_sqlite3_dataset(example_conn: sqlite3.Connection, split: str) -> None:
         """,
         {"split": split},
     )
-    assert {"train": 3, "test": 1}[split] == len(dataset)
+    # These numbers depend on the random number generator in `conftest.py`.
+    assert {"train": 36, "test": 4, "valid": 11}[split] == len(dataset)
     assert dataset._idx
     for i, playlist_id in enumerate(dataset._idx):
         element = dataset[i]
