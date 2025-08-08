@@ -22,7 +22,7 @@ This architecture is motivated by:
 
 ## Data
 
-The million playlist dataset from https://www.aicrowd.com/challenges/spotify-million-playlist-dataset-challenge. The data are stuck together into a single sqlite database (see [`schema.sql`](./src/spotify_recommender/schema.sql) and [`create_database.py`](./src/spotify_recommender/scripts/create_database.py) for details). This database also contains tables to indicate the train-test split so we don't accidentally have leakage and reproducible training.
+The million playlist dataset from https://www.aicrowd.com/challenges/spotify-million-playlist-dataset-challenge. The data are stuck together into a single sqlite database (see [`schema.sql`](./src/spotify_recommender/schema.sql) and [`build_db.py`](./src/spotify_recommender/scripts/build_db.py) for details). This database also contains tables to indicate the train-test split so we don't accidentally have leakage and reproducible training. Building the database takes 15 to 20 minutes, but it's well worth it for the ease of querying data.
 
 ## Training
 
