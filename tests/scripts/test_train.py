@@ -12,15 +12,16 @@ decoder_only_mini_config_path = str(
 
 
 def test_train(example_db_path: Path, tmp_path: Path) -> None:
-    # Simple end-to-end run.
-    output_path = tmp_path / "train"
-    train.__main__(
-        [
-            str(output_path),
-            "DecoderOnly",
-            decoder_only_mini_config_path,
-        ]
-    )
+    with patch.dict("os.environ", MPD=str(example_db_path)):
+        # Simple end-to-end run.
+        output_path = tmp_path / "train"
+        train.__main__(
+            [
+                str(output_path),
+                "DecoderOnly",
+                decoder_only_mini_config_path,
+            ]
+        )
 
 
 def test_train_resume(example_db_path: Path, tmp_path: Path) -> None:
