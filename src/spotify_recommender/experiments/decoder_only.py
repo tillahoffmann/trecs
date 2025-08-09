@@ -221,6 +221,9 @@ class DecoderOnlyExperiment(Experiment):
         if encoder_path.is_file():
             self.track_encoder = Encoder.from_pickle(encoder_path)
         else:
+            print(
+                f"Building a new tokenizer from '{self.db_path}'. This may take a few minutes ..."
+            )
             with contextlib.closing(sqlite3.connect(self.db_path)) as conn:
                 cursor = conn.execute(
                     SELECT_DISTINCT_TRACK_IDS_BY_SPLIT, {"split": "train"}
@@ -230,6 +233,7 @@ class DecoderOnlyExperiment(Experiment):
                     on_unknown="default",
                     default="<UNK>",
                 )
+            self.track_encoder.to_pickle(encoder_path)
 
         self.eop_token = self.track_encoder("<EOP>")
         num_tracks = len(self.track_encoder)
