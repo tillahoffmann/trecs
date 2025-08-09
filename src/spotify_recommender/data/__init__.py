@@ -1,4 +1,5 @@
 from .util import (
+    create_input_and_label_batches,
     BatchTransform,
     Encoder,
     pad_batch,
@@ -12,6 +13,7 @@ from .util import (
 
 
 __all__ = [
+    "create_input_and_label_batches",
     "BatchTransform",
     "Encoder",
     "pad_batch",

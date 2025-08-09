@@ -301,4 +301,19 @@ class LambdaMap(grain.transforms.Map, Generic[T, U]):
         self.kwargs = kwargs
 
     def map(self, element: T) -> U:  # pyright: ignore[reportIncompatibleMethodOverride]
-        return self.func(element, *self.args, **self.kwargs)
+
+def create_input_and_label_batches(
+    batch: dict[str, jnp.ndarray], *, label_key: str = "label"
+) -> tuple[dict[str, jnp.ndarray], jnp.ndarray]:
+    """Create inputs and labels for training an autoregressive model.
+
+    Args:
+        batch: Mapping of tensors with shape `(batch_size, num_tokens, ...)`.
+        label_key: Key of the labels to predict.
+
+    Returns:
+        Pair of inputs and labels with token length reduced by one.
+    """
+    labels = batch[label_key][:, 1:]
+    inputs = {key: value[:, :-1] for key, value in batch.items()}
+    return inputs, labels
