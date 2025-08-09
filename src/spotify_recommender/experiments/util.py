@@ -13,7 +13,7 @@ class TrainConfig(pydantic.BaseModel):
     checkpoint_every: int = pydantic.Field(
         description="Checkpoint the training state every # steps.", default=1_000
     )
-    validate_every: int = pydantic.Field(
+    eval_every: int = pydantic.Field(
         description="Evaluate the validation loss every # steps.", default=1_00
     )
     batch_size: int = pydantic.Field(description="Size of mini batches.")

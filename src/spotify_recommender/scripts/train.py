@@ -107,7 +107,7 @@ class _Args:
     # Optional arguments for the experiments.
     seed: int | None
     num_steps: int | None
-    validate_every: int | None
+    eval_every: int | None
     resume: bool
     # Core to the results: the experiment and output directory.
     experiment: str
@@ -171,8 +171,8 @@ def __main__(argv: list[str] | None = None) -> None:
         config.train.seed = args.seed
     if args.num_steps is not None:
         config.train.num_steps = args.num_steps
-    if args.validate_every is not None:
-        config.train.validate_every = args.validate_every
+    if args.eval_every is not None:
+        config.train.eval_every = args.eval_every
     experiment = experiment_cls(config)
 
     # Set up random number generation streams for:
@@ -204,6 +204,7 @@ def __main__(argv: list[str] | None = None) -> None:
     data_iterators = {key: iter(value) for key, value in data_loaders.items()}
 
     checkpoint_path = (args.output / "checkpoints").resolve()
+    checkpoint_manager: ocp.CheckpointManager
     with ocp.CheckpointManager(
         checkpoint_path,
         options=ocp.CheckpointManagerOptions(max_to_keep=3),
@@ -235,7 +236,11 @@ def __main__(argv: list[str] | None = None) -> None:
         # Start the training loop.
         with (
             tqdm(total=config.train.num_steps, initial=step) as progress,
-            SummaryWriter(str(args.output / "logdir")) as writer,
+            # One writer each for train and validation
+            # (https://stackoverflow.com/a/37156491/1150961). Maybe "valid" would be a
+            # better name than "eval", but tensorboard orders the plots alphabetically.
+            SummaryWriter(str(args.output / "logdir/train")) as train_writer,
+            SummaryWriter(str(args.output / "logdir/eval")) as valid_writer,
         ):
             while step < config.train.num_steps:
                 # Run one training step.
@@ -243,19 +248,19 @@ def __main__(argv: list[str] | None = None) -> None:
                 train_loss = train_step(
                     model, optimizer, inputs, labels, prng_key=rngs.train_loss()
                 )
-                writer.add_scalar("train_loss", train_loss, global_step=step)
+                train_writer.add_scalar("loss", train_loss, global_step=step)
                 if not jnp.isfinite(train_loss):
                     print(
                         f"WARNING: Training loss was not finite for batch with shape {labels.shape}: {train_loss}"
                     )
 
                 # Evaluate the validation loss.
-                if step % config.train.validate_every == 0:
+                if step % config.train.eval_every == 0:
                     inputs, labels = next(data_iterators["valid"])
                     valid_loss = evaluate_loss(
                         model, inputs, labels, prng_key=rngs.valid_loss()
                     )
-                    writer.add_scalar("valid_loss", valid_loss, global_step=step)
+                    valid_writer.add_scalar("loss", valid_loss, global_step=step)
 
                 # Checkpoint the model.
                 if step % config.train.checkpoint_every == 0:
@@ -283,6 +288,7 @@ def __main__(argv: list[str] | None = None) -> None:
                 rngs=rngs,
                 step=step,
             )
+            checkpoint_manager.wait_until_finished()
 
         print("done")
 
