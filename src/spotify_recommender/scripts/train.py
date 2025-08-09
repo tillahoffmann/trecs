@@ -22,17 +22,20 @@ def checkpoint(
 ) -> None:
     flax_nodes = {"model": model, "optimizer": optimizer, "rngs": rngs}
     flax_args = {
-        key: ocp.args.PyTreeSave(nnx.state(value)) for key, value in flax_nodes.items()
+        key: ocp.args.PyTreeSave(nnx.state(value))  # pyright: ignore[reportCallIssue]
+        for key, value in flax_nodes.items()
     }
     checkpoint_manager.save(
         step,
         args=ocp.args.Composite(
             **{
-                f"data_iterator_{split}": grain.checkpoint.CheckpointSave(iterator)
+                f"data_iterator_{split}": grain.checkpoint.CheckpointSave(
+                    iterator  # pyright: ignore[reportCallIssue]
+                )
                 for split, iterator in data_iterators.items()
             },
             **flax_args,
-            step=ocp.args.JsonSave(step),
+            step=ocp.args.JsonSave(step),  # pyright: ignore[reportCallIssue]
         ),
     )
 
@@ -51,23 +54,27 @@ def restore(
         step,
         args=ocp.args.Composite(
             **{
-                f"data_iterator_{split}": grain.checkpoint.CheckpointRestore(iterator)
+                f"data_iterator_{split}": grain.checkpoint.CheckpointRestore(
+                    iterator  # pyright: ignore[reportCallIssue]
+                )
                 for split, iterator in data_iterators.items()
             },
             **{
-                key: ocp.args.PyTreeRestore(abstract_state)
+                key: ocp.args.PyTreeRestore(
+                    abstract_state  # pyright: ignore[reportCallIssue]
+                )
                 for key, abstract_state in flax_states.items()
             },
-            step=ocp.args.JsonRestore(),
+            step=ocp.args.JsonRestore(),  # pyright: ignore[reportCallIssue]
         ),
     )
     for key, value in flax_nodes.items():
         nnx.update(value, restored[key])
 
-    return restored.step
+    return restored["step"]
 
 
-def as_train_step(loss_fn):
+def as_train_step(loss_fn, safe_update: bool = False):
     """Transform a function to act as a train step."""
 
     @functools.wraps(loss_fn)
@@ -76,7 +83,21 @@ def as_train_step(loss_fn):
     ):
         grad_fn = nnx.value_and_grad(loss_fn)
         loss, grads = grad_fn(model, inputs, labels, prng_key)
-        optimizer.update(model, grads)
+        if safe_update:
+            # We cannot capture optimizer because nnx.cond creates a new "trace
+            # context." That's why we have an extra lambda, even though we should be
+            # able to just use `optimizer.update` as the true function. For details, see
+            # https://github.com/google/flax/discussions/3998#discussioncomment-9780795.
+            nnx.cond(
+                jnp.isfinite(loss),
+                lambda optimizer, model, grad: optimizer.update(model, grad),
+                lambda *_: None,
+                optimizer,
+                model,
+                grads,
+            )
+        else:
+            optimizer.update(model, grads)
         return loss
 
     return _train_step
@@ -200,11 +221,15 @@ def __main__(argv: list[str] | None = None) -> None:
             optimizer = experiment.create_optimizer(model)
             step = 0
 
-        # Start the training loop.
-        evaluate_loss = nnx.jit(experiment.evaluate_loss)
-        train_step = as_train_step(experiment.evaluate_loss)
+        # We use a "safe" update that is only applied when the loss is finite. This
+        # mitigates issues with noise from minibatch sampling occasionally messing with
+        # the optimization.
+        train_step = as_train_step(experiment.evaluate_loss, safe_update=True)
         train_step = nnx.jit(train_step)
+        evaluate_loss = nnx.jit(experiment.evaluate_loss)
         valid_loss = jnp.nan
+
+        # Start the training loop.
         with (
             tqdm(total=config.train.num_steps, initial=step) as progress,
             SummaryWriter(str(args.output / "logdir")) as writer,
