@@ -220,6 +220,9 @@ class DecoderOnlyExperiment(Experiment):
 
         if encoder_path.is_file():
             self.track_encoder = Encoder.from_pickle(encoder_path)
+            print(
+                f"Loaded track encoder with {len(self.track_encoder):,} tokens from '{encoder_path}'."
+            )
         else:
             print(
                 f"Building a new tokenizer from '{self.db_path}'. This may take a few minutes ..."
@@ -234,6 +237,7 @@ class DecoderOnlyExperiment(Experiment):
                     default="<UNK>",
                 )
             self.track_encoder.to_pickle(encoder_path)
+            print(f"Built new track encoder with {len(self.track_encoder):,} tokens.")
 
         self.eop_token = self.track_encoder("<EOP>")
         num_tracks = len(self.track_encoder)
