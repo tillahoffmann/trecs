@@ -92,8 +92,11 @@ class DecoderOnlyExperiment(Experiment):
             INNER JOIN tracks
             ON ptm.track_id = tracks.id
             WHERE ptm.playlist_id = :id
+            ORDER BY ptm.pos
+            LIMIT :context_length + 1
             """,
             {"split": split},
+            {"context_length": self.config.arch.context_length},
         )
         return cast(RandomAccessDataSource, dataset)
 
@@ -109,9 +112,9 @@ class DecoderOnlyExperiment(Experiment):
                 lambda x: {
                     "track_id": [
                         self.track_encoder(y)  # pyright: ignore[reportOptionalCall]
-                        for y in x["track_id"][: self.config.arch.context_length + 1]
+                        for y in x["track_id"]
                     ],
-                    "pos": x["pos"][: self.config.arch.context_length + 1],
+                    "pos": x["pos"],
                 },
                 validate_output=lambda y: all(
                     len(seq) <= self.config.arch.context_length + 1
