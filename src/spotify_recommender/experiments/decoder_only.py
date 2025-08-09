@@ -24,7 +24,7 @@ from ..data import (
     BatchTransform,
     Encoder,
 )
-from ..util import sampled_dot_cross_entropy_with_integer_labels
+from ..util import sampled_dot_cross_entropy_with_integer_labels, evaluate_eop_loss_mask
 
 
 class DecoderOnlyArchConfig(BaseModel):
@@ -191,9 +191,7 @@ class DecoderOnlyExperiment(Experiment):
         )
 
         # Mask out anything after the first end of playlist token.
-        first = jnp.argmax(labels == self.eop_token, axis=1)
-        length = labels.shape[-1]
-        mask = (jnp.arange(length) <= first[:, None]).ravel()
+        mask = evaluate_eop_loss_mask(labels, self.eop_token)
         return sampled_loss @ mask.ravel() / mask.sum()
 
     @property

@@ -107,3 +107,14 @@ def sampled_dot_cross_entropy_with_integer_labels(
     return -(
         label_logits - jnp.log(jnp.exp(label_logits) + scale * sampled_negative_exp)
     )
+
+
+def evaluate_eop_loss_mask(labels: jnp.ndarray, eop_token: int) -> jnp.ndarray:
+    """Evaluate a mask such that the loss from elements *after* the first eop token do
+    not contribute to the loss."""
+    # Mask out anything after the first end of playlist token.
+    is_eop = labels == eop_token
+    has_eop = is_eop.any(axis=1)
+    length = labels.shape[-1]
+    first = jnp.where(has_eop, jnp.argmax(is_eop, axis=1), length - 1)
+    return jnp.arange(length) <= first[:, None]

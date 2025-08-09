@@ -4,7 +4,10 @@ from jax import random
 from jax.scipy.special import softmax
 import numpy
 from optax import softmax_cross_entropy_with_integer_labels
-from spotify_recommender.util import sampled_dot_cross_entropy_with_integer_labels
+from spotify_recommender.util import (
+    sampled_dot_cross_entropy_with_integer_labels,
+    evaluate_eop_loss_mask,
+)
 
 
 def test_sampled_dot_cross_entropy_with_integer_labels() -> None:
@@ -34,3 +37,24 @@ def test_sampled_dot_cross_entropy_with_integer_labels() -> None:
     intercept, coef = fit.coef
     assert abs(coef - 1) < 0.01
     assert abs(intercept) < 0.05
+
+
+def test_evaluate_eop_loss_mask() -> None:
+    labels = jnp.asarray(
+        [
+            [0, 0, 0, 0, 0],
+            [1, 2, 3, 0, 0],
+            [1, 2, 3, 9, 0],
+            [4, 5, 6, 7, 8],
+        ]
+    )
+    expected = jnp.asarray(
+        [
+            [1, 0, 0, 0, 0],
+            [1, 1, 1, 1, 0],
+            [1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1],
+        ]
+    ).astype(bool)
+    actual = evaluate_eop_loss_mask(labels, 0)
+    numpy.testing.assert_array_equal(actual, expected)
