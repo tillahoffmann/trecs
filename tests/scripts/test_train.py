@@ -37,7 +37,7 @@ def test_train_resume(example_db_path: Path, tmp_path: Path) -> None:
         train.__main__(
             [
                 "--num-steps=7",
-                "--validate-every=2",
+                "--eval-every=2",
                 str(output_path1),
                 "DecoderOnly",
                 decoder_only_mini_config_path,
@@ -49,7 +49,7 @@ def test_train_resume(example_db_path: Path, tmp_path: Path) -> None:
         train.__main__(
             [
                 "--num-steps=4",
-                "--validate-every=2",
+                "--eval-every=2",
                 str(output_path2),
                 "DecoderOnly",
                 decoder_only_mini_config_path,
@@ -58,7 +58,7 @@ def test_train_resume(example_db_path: Path, tmp_path: Path) -> None:
         train.__main__(
             [
                 "--num-steps=7",
-                "--validate-every=2",
+                "--eval-every=2",
                 "--resume",
                 str(output_path2),
                 "DecoderOnly",
@@ -72,7 +72,7 @@ def test_train_resume(example_db_path: Path, tmp_path: Path) -> None:
     events_by_run = []
     for path in paths:
         events = []
-        for filename in (path / "logdir").glob("*.tfevents*"):
+        for filename in (path / "logdir").glob("**/*.tfevents*"):
             stream = EventFileLoader(str(filename)).Load()
             for event in stream:
                 for (
@@ -83,10 +83,11 @@ def test_train_resume(example_db_path: Path, tmp_path: Path) -> None:
                             "tag": summary.tag,
                             "value": summary.tensor.float_val[0],
                             "step": event.step,  # pyright: ignore[reportAttributeAccessIssue]
+                            "split": filename.parent.stem,
                         }
                     )
         events_by_run.append(pd.DataFrame(events))
-    merged = pd.merge(*events_by_run, on=["step", "tag"], how="outer")
+    merged = pd.merge(*events_by_run, on=["step", "tag", "split"], how="outer")
     numpy.testing.assert_allclose(merged.value_x, merged.value_y)
 
 

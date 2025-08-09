@@ -133,7 +133,7 @@ def __main__(argv: list[str] | None = None) -> None:
         help="Number of training steps, takes precedence over the experiment config.",
     )
     parser.add_argument(
-        "--validate-every",
+        "--eval-every",
         type=int,
         help="Evaluate validation loss every # steps, takes precedence over the experiment config.",
     )
