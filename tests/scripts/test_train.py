@@ -3,6 +3,12 @@ import pandas as pd
 from pathlib import Path
 from spotify_recommender.scripts import train
 from tensorboard.backend.event_processing.event_file_loader import EventFileLoader
+from unittest.mock import patch
+
+
+decoder_only_mini_config_path = str(
+    Path(__file__).parent.parent / "assets/decoder-only-mini.json"
+)
 
 
 def test_train(example_db_path: Path, tmp_path: Path) -> None:
@@ -10,58 +16,48 @@ def test_train(example_db_path: Path, tmp_path: Path) -> None:
     output_path = tmp_path / "train"
     train.__main__(
         [
-            "--num-layers=2",
-            "--num-features=16",
-            "--num-hidden=32",
-            str(example_db_path),
             str(output_path),
+            "DecoderOnly",
+            decoder_only_mini_config_path,
         ]
     )
 
 
 def test_train_resume(example_db_path: Path, tmp_path: Path) -> None:
-    # Run once end to end.
-    output_path1 = tmp_path / "train1"
-    train.__main__(
-        [
-            "--num-layers=2",
-            "--num-features=16",
-            "--num-hidden=32",
-            "--valid-every=2",
-            "--unk-proba=0.05",
-            "--num-steps=7",
-            str(example_db_path),
-            str(output_path1),
-        ]
-    )
+    with patch.dict("os.environ", MPD=str(example_db_path)):
+        # Run once end to end.
+        output_path1 = tmp_path / "train1"
+        train.__main__(
+            [
+                "--num-steps=7",
+                "--validate-every=2",
+                str(output_path1),
+                "DecoderOnly",
+                decoder_only_mini_config_path,
+            ]
+        )
 
-    # Run in two parts.
-    output_path2 = tmp_path / "train2"
-    train.__main__(
-        [
-            "--num-layers=2",
-            "--num-features=16",
-            "--num-hidden=32",
-            "--valid-every=2",
-            "--unk-proba=0.05",
-            "--num-steps=3",
-            str(example_db_path),
-            str(output_path2),
-        ]
-    )
-    train.__main__(
-        [
-            "--num-layers=2",
-            "--num-features=16",
-            "--num-hidden=32",
-            "--valid-every=2",
-            "--unk-proba=0.05",
-            "--num-steps=7",
-            "--resume",
-            str(example_db_path),
-            str(output_path2),
-        ]
-    )
+        # Run in two parts.
+        output_path2 = tmp_path / "train2"
+        train.__main__(
+            [
+                "--num-steps=4",
+                "--validate-every=2",
+                str(output_path2),
+                "DecoderOnly",
+                decoder_only_mini_config_path,
+            ]
+        )
+        train.__main__(
+            [
+                "--num-steps=7",
+                "--validate-every=2",
+                "--resume",
+                str(output_path2),
+                "DecoderOnly",
+                decoder_only_mini_config_path,
+            ]
+        )
 
     # We could do an exhaustive comparison here, but let's just load the training and
     # validation losses and compare them.
