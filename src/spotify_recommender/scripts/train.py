@@ -229,7 +229,7 @@ def __main__(argv: list[str] | None = None) -> None:
                     writer.add_scalar("valid_loss", valid_loss, global_step=step)
 
                 # Checkpoint the model.
-                if step % config.train.validate_every == 0:
+                if step % config.train.checkpoint_every == 0:
                     checkpoint(
                         checkpoint_manager,
                         model=model,
