@@ -182,7 +182,8 @@ def __main__(argv: list[str] | None = None) -> None:
     }
     data_iterators = {key: iter(value) for key, value in data_loaders.items()}
 
-    with ocp.CheckpointManager(args.output / "checkpoints") as checkpoint_manager:
+    checkpoint_path = (args.output / "checkpoints").resolve()
+    with ocp.CheckpointManager(checkpoint_path) as checkpoint_manager:
         if args.resume:
             model = nnx.eval_shape(lambda: experiment.create_model(nnx.Rngs(0)))
             optimizer = nnx.eval_shape(lambda: experiment.create_optimizer(model))
