@@ -1,6 +1,7 @@
 import collectiontools
 import grain
 import itertools
+from jax import numpy as jnp
 from numpy.random import Generator
 from pathlib import Path
 import pickle
@@ -295,12 +296,28 @@ class LambdaRandomMap(grain.transforms.RandomMap, Generic[T, U]):
 class LambdaMap(grain.transforms.Map, Generic[T, U]):
     """Apply a callable to all elements of a map."""
 
-    def __init__(self, func: Callable[Concatenate[T, ...], U], *args, **kwargs) -> None:
+    def __init__(
+        self,
+        func: Callable[Concatenate[T, ...], U],
+        *args,
+        validate_input: Callable[[T], bool] | None = None,
+        validate_output: Callable[[U], bool] | None = None,
+        **kwargs,
+    ) -> None:
         self.func = func
         self.args = args
         self.kwargs = kwargs
+        self.validate_input = validate_input
+        self.validate_output = validate_output
 
     def map(self, element: T) -> U:  # pyright: ignore[reportIncompatibleMethodOverride]
+        if self.validate_input and not self.validate_input(element):
+            raise ValueError(f"Invalid input for `{self.func}`: {element}")
+        result = self.func(element, *self.args, **self.kwargs)
+        if self.validate_output and not self.validate_output(result):
+            raise ValueError(f"Invalid output from `{self.func}`: {result}")
+        return result
+
 
 def create_input_and_label_batches(
     batch: dict[str, jnp.ndarray], *, label_key: str = "label"
