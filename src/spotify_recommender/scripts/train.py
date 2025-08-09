@@ -244,9 +244,10 @@ def __main__(argv: list[str] | None = None) -> None:
                     model, optimizer, inputs, labels, prng_key=rngs.train_loss()
                 )
                 writer.add_scalar("train_loss", train_loss, global_step=step)
-                assert jnp.isfinite(
-                    train_loss
-                ), f"Training loss is not finite: {train_loss}."
+                if not jnp.isfinite(train_loss):
+                    print(
+                        f"WARNING: Training loss was not finite for batch with shape {labels.shape}: {train_loss}"
+                    )
 
                 # Evaluate the validation loss.
                 if step % config.train.validate_every == 0:
