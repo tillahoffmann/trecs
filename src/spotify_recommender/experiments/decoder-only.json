@@ -1,7 +1,7 @@
 {
     "train": {
-        "num_steps": 100000,
-        "batch_size": 8,
+        "num_steps": 50000,
+        "batch_size": 16,
         "learning_rate": 0.0005,
         "seed": 17,
         "unk_proba": 0.01
