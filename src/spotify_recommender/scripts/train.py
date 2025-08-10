@@ -251,7 +251,8 @@ def __main__(argv: list[str] | None = None) -> None:
                 train_writer.add_scalar("loss", train_loss, global_step=step)
                 if not jnp.isfinite(train_loss):
                     print(
-                        f"WARNING: Training loss was not finite for batch with shape {labels.shape}: {train_loss}"
+                        "WARNING: Training loss was not finite for batch with shape "
+                        f"{labels.shape} at step {step:,}: {train_loss}"
                     )
 
                 # Evaluate the validation loss.
