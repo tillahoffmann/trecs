@@ -43,13 +43,14 @@ def checkpoint(
 def restore(
     checkpoint_manager: ocp.CheckpointManager,
     step: int | None,
-    model: nnx.Module,
-    optimizer: nnx.Optimizer,
-    data_iterators: dict[str, grain.DataLoaderIterator],
-    rngs: nnx.Rngs,
+    model: nnx.Module | None = None,
+    optimizer: nnx.Optimizer | None = None,
+    data_iterators: dict[str, grain.DataLoaderIterator] | None = None,
+    rngs: nnx.Rngs | None = None,
 ) -> int:
     flax_nodes = {"model": model, "optimizer": optimizer, "rngs": rngs}
-    flax_states = {key: nnx.state(value) for key, value in flax_nodes.items()}
+    flax_states = {key: nnx.state(value) for key, value in flax_nodes.items() if value is not None}
+    data_iterators = data_iterators or {}
     restored = checkpoint_manager.restore(
         step,
         args=ocp.args.Composite(
@@ -69,7 +70,8 @@ def restore(
         ),
     )
     for key, value in flax_nodes.items():
-        nnx.update(value, restored[key])
+        if value is not None:
+            nnx.update(value, restored[key])
 
     return restored["step"]
 
