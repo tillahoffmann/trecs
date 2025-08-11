@@ -4,7 +4,7 @@ from jax import random
 from jax.scipy.special import softmax
 import numpy
 from optax import softmax_cross_entropy_with_integer_labels
-from spotify_recommender.util import (
+from trecs.util import (
     sampled_dot_cross_entropy_with_integer_labels,
     evaluate_eop_loss_mask,
 )

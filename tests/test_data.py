@@ -1,7 +1,7 @@
 from jax import numpy as jnp
 from pathlib import Path
 import pytest
-from spotify_recommender.data import (
+from trecs.data import (
     create_input_and_label_batches,
     Encoder,
     pad_batch,

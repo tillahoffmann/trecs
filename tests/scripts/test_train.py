@@ -6,7 +6,7 @@ import jax
 from jax import numpy as jnp
 import pandas as pd
 from pathlib import Path
-from spotify_recommender.scripts import train
+from trecs.scripts import train
 from tensorboard.backend.event_processing.event_file_loader import EventFileLoader
 from unittest.mock import patch
 import pytest

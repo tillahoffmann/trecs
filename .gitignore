@@ -3,9 +3,11 @@ __pycache__/
 .DS_Store
 .env
 .venv
+.vscode
 *.egg-info
 *.ipynb
 *.ipynb-checkpoint
 /data/
+~*
 htmlcov/
 playground/
