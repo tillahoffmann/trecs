@@ -8,6 +8,7 @@ from grain import DataLoader
 import optax
 import os
 from jax import numpy as jnp
+import pydantic
 import sqlite3
 from typing import cast
 from .util import Experiment
@@ -27,18 +28,18 @@ from ..util import sampled_dot_cross_entropy_with_integer_labels, evaluate_eop_l
 
 
 class DecoderOnlyExperiment(Experiment):
-    context_length: int = 50
-    num_layers: int = 6
-    num_heads: int = 8
-    num_features: int = 128
-    num_hidden: int = 256
-    dropout: float = 0.1
-    num_tracks: int | None = None
-    unk_proba: float = 0.01
-    weight_decay: float = 0.01
+    context_length: int
+    num_layers: int
+    num_heads: int
+    num_features: int
+    num_hidden: int
+    dropout: float = pydantic.Field(ge=0, le=1)
+    num_tracks: int | None
+    unk_proba: float = pydantic.Field(ge=0, le=1)
+    weight_decay: float = pydantic.Field(ge=0)
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, **data) -> None:
+        super().__init__(**data)
         self.track_encoder = None
         self.eop_token = None
 

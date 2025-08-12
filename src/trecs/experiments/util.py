@@ -3,22 +3,23 @@ from grain import DataLoader
 from grain.sources import RandomAccessDataSource
 from jax import numpy as jnp
 from pathlib import Path
+import pydantic
 from typing import Any
 
 
-class Experiment:
+class Experiment(pydantic.BaseModel):
     """Base class for experiments.
 
     Each experiment comprises model, optimizer, and data pipelines defined in regular Python code,
-    with simple configuration parameters as class attributes.
+    with configuration parameters as pydantic fields.
     """
 
-    seed: int = 42
-    num_steps: int = 10000
-    eval_every: int = 1000
-    checkpoint_every: int = 1000
-    batch_size: int = 32
-    learning_rate: float = 0.001
+    seed: int
+    num_steps: int
+    eval_every: int
+    checkpoint_every: int
+    batch_size: int
+    learning_rate: float = pydantic.Field(gt=0)
 
     def create_model(self, rngs: nnx.Rngs) -> nnx.Module:
         """Create the model to be trained."""
