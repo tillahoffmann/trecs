@@ -1,6 +1,6 @@
 from contextlib import closing
 from pathlib import Path
-from spotify_recommender.scripts import build_db
+from trecs.scripts import build_db
 import sqlite3
 
 

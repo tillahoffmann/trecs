@@ -1,6 +1,8 @@
+from jax import numpy as jnp
 from pathlib import Path
 import pytest
-from spotify_recommender.data import (
+from trecs.data import (
+    create_input_and_label_batches,
     Encoder,
     pad_batch,
     SELECT_PLAYLISTS_BY_SPLIT,
@@ -80,3 +82,16 @@ def test_encoder(tmp_path: Path) -> None:
     encoder.to_pickle(path)
     encoder = Encoder.from_pickle(path)
     assert encoder["d"] == encoder["b"]
+
+
+def test_create_input_and_label_batches() -> None:
+    batch = {
+        "a": jnp.ones((5, 1)) * jnp.arange(7),
+        "x": jnp.arange(105).reshape((5, 7, 3)),
+    }
+    inputs, labels = create_input_and_label_batches(batch, label_key="a")
+    assert labels.shape == (5, 6)
+    assert inputs["a"].shape == (5, 6)
+    assert inputs["x"].shape == (5, 6, 3)
+    assert inputs["a"].max() == 5
+    assert labels.min() == 1

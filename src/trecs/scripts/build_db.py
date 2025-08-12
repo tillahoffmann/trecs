@@ -214,11 +214,14 @@ def __main__(argv: list[str] | None = None) -> None:
         insert_splits(conn, split_fracs, playlist_ids, args.seed)
         conn.commit()
 
+        print("Creating indices for efficient querying ...")
         # Create indices for fast queries. See the schema file for details.
         _, index_sql, _ = re.split(r"</?INDICES>", schema)
         conn.executescript(index_sql)
         # I don't think we need this, but can't hurt.
         conn.commit()
+
+    print("Done!")
 
 
 if __name__ == "__main__":
