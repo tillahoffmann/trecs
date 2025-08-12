@@ -37,11 +37,11 @@ class DecoderOnlyExperiment(Experiment):
     num_tracks: int | None
     unk_proba: float = pydantic.Field(ge=0, le=1)
     weight_decay: float = pydantic.Field(ge=0)
+    eop_token: int | None = None
+    track_encoder: Encoder | None = None
 
-    def __init__(self, **data) -> None:
-        super().__init__(**data)
-        self.track_encoder = None
-        self.eop_token = None
+    # Because the `Encoder` is not a standard class.
+    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
     def create_model(self, rngs: nnx.Rngs) -> PlaylistDecoder:
         assert self.num_tracks, "Number of tracks must be specified or inferred."
