@@ -1,4 +1,4 @@
-.PHONY : tests
+.PHONY : experiments tests
 
 tests :
 	pytest tests --cov=trecs --cov-report=term-missing -v
@@ -21,3 +21,15 @@ data/spotify_million_playlist_dataset/md5sums.check : data/spotify_million_playl
 data/mpd.db : data/spotify_million_playlist_dataset/md5sums.check
 	# Build the database.
 	python -m trecs.scripts.build_db data/mpd.db data/spotify_million_playlist_dataset/data/mpd.slice.*.json
+
+# Training.
+
+WORKDIR ?= workspace
+MPD_PATH ?= data/mpd.db
+EXPERIMENT_SETUPS = $(filter-out $(wildcard src/trecs/experiments/*/_*.py),$(wildcard src/trecs/experiments/*/*.py))
+EXPERIMENT_OUTPUTS = $(addprefix ${WORKDIR}/,${EXPERIMENT_SETUPS:src/trecs/experiments/%.py=%})
+
+experiments : ${EXPERIMENT_OUTPUTS}
+
+${EXPERIMENT_OUTPUTS} : ${WORKDIR}/% : src/trecs/experiments/%.py data/mpd.db
+	MPD=${MPD_PATH} python -m trecs.scripts.train $@ $<

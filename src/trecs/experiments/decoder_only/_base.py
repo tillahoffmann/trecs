@@ -10,10 +10,10 @@ import os
 from jax import numpy as jnp
 import pydantic
 import sqlite3
-from typing import cast
-from .util import Experiment
-from ..models import PlaylistDecoder
-from ..data import (
+from typing import cast, Literal
+from ..util import Experiment
+from ...models import PlaylistDecoder
+from ...data import (
     Sqlite3Dataset,
     SELECT_DISTINCT_TRACK_IDS_BY_SPLIT,
     SELECT_PLAYLISTS_BY_SPLIT,
@@ -24,7 +24,11 @@ from ..data import (
     BatchTransform,
     Encoder,
 )
-from ..util import sampled_dot_cross_entropy_with_integer_labels, evaluate_eop_loss_mask
+from ...util import (
+    sampled_dot_cross_entropy_with_integer_labels_and_label_in_denominator,
+    sampled_dot_cross_entropy_with_integer_labels_uniform,
+    evaluate_eop_loss_mask,
+)
 
 
 class DecoderOnlyExperiment(Experiment):
@@ -33,11 +37,18 @@ class DecoderOnlyExperiment(Experiment):
     num_heads: int
     num_features: int
     num_hidden: int
+    loss_function: Literal[
+        "label_in_denominator",
+        "uniform",
+    ]
     dropout: float = pydantic.Field(ge=0, le=1)
     num_tracks: int | None
     unk_proba: float = pydantic.Field(ge=0, le=1)
     weight_decay: float = pydantic.Field(ge=0)
+
+    start_token: int | None = None
     eop_token: int | None = None
+    unk_token: int | None = None
     track_encoder: Encoder | None = None
 
     # Because the `Encoder` is not a standard class.
@@ -78,7 +89,7 @@ class DecoderOnlyExperiment(Experiment):
             ON ptm.track_id = tracks.id
             WHERE ptm.playlist_id = :id
             ORDER BY ptm.pos
-            LIMIT :context_length + 1
+            LIMIT :context_length
             """,
             {"split": split},
             {"context_length": self.context_length},
@@ -90,7 +101,14 @@ class DecoderOnlyExperiment(Experiment):
     ) -> DataLoader:
         assert self.track_encoder, "Create track encoder first."
         operations = [
-            # {START}: {"pos": [0, 1, ...], "track_id": [43, 7, ...]}
+            # {INPUT}: {"pos": [0, 1, ...], "track_id": [43, 7, ...]}
+            # Inject a start token.
+            LambdaMap[dict, dict](
+                lambda x: {
+                    "track_id": ["<START>", *x["track_id"]],
+                    "pos": list(range(len(x["pos"]) + 1)),
+                }
+            ),
             # Encode tracks and truncate to the maximum context length:
             # {"pos": [0, 1, ...], "track_id": [0, 1, ...]}
             LambdaMap[dict, dict](
@@ -108,7 +126,11 @@ class DecoderOnlyExperiment(Experiment):
             # Batch records: [{"track_id": [0, 1], ...}, {"track_id": [4, 5], ...}, ...]
             BatchTransform(self.batch_size, on_short="drop"),
             # Pad values to the same length.
-            LambdaMap(pad_batch, fill_value={"track_id": self.eop_token, "pos": 0}),
+            LambdaMap(
+                pad_batch,
+                fill_value={"track_id": self.eop_token, "pos": 0},
+                length=self.context_length + 1,
+            ),
             # Transpose to get a dictionary keyed by `track_id`, `pos`, etc. Then
             # convert to jax arrays.
             LambdaMap[dict, dict](
@@ -166,7 +188,16 @@ class DecoderOnlyExperiment(Experiment):
         flat_labels = labels.reshape((batch_size * num_tokens,))
 
         # Evaluate the loss.
-        sampled_loss = sampled_dot_cross_entropy_with_integer_labels(
+        if self.loss_function == "label_in_denominator":
+            func = (
+                sampled_dot_cross_entropy_with_integer_labels_and_label_in_denominator
+            )
+        elif self.loss_function == "uniform":
+            func = sampled_dot_cross_entropy_with_integer_labels_uniform
+        else:
+            raise ValueError(self.loss_function)
+
+        sampled_loss = func(
             prng_key,
             flat_embeddings,
             model.track_embedding.embedding.value,
@@ -214,14 +245,23 @@ class DecoderOnlyExperiment(Experiment):
                     SELECT_DISTINCT_TRACK_IDS_BY_SPLIT, {"split": "train"}
                 )
                 self.track_encoder = Encoder(
-                    ["<UNK>", "<EOP>", *(track_id for (track_id,) in cursor)],
+                    [
+                        "<START>",
+                        "<EOP>",
+                        "<UNK>",
+                        *(track_id for (track_id,) in cursor),
+                    ],
                     on_unknown="default",
                     default="<UNK>",
                 )
             self.track_encoder.to_pickle(encoder_path)
             print(f"Built new track encoder with {len(self.track_encoder):,} tokens.")
 
+        # Get named special tokens.
+        self.start_token = self.track_encoder("<START>")
         self.eop_token = self.track_encoder("<EOP>")
+        self.unk_token = self.track_encoder("<UNK>")
+
         num_tracks = len(self.track_encoder)
         if self.num_tracks is None:
             self.num_tracks = num_tracks

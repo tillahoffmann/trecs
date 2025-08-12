@@ -4,13 +4,22 @@ from jax import random
 from jax.scipy.special import softmax
 import numpy
 from optax import softmax_cross_entropy_with_integer_labels
+import pytest
 from trecs.util import (
-    sampled_dot_cross_entropy_with_integer_labels,
+    sampled_dot_cross_entropy_with_integer_labels_and_label_in_denominator,
+    sampled_dot_cross_entropy_with_integer_labels_uniform,
     evaluate_eop_loss_mask,
 )
 
 
-def test_sampled_dot_cross_entropy_with_integer_labels() -> None:
+@pytest.mark.parametrize(
+    "func",
+    [
+        sampled_dot_cross_entropy_with_integer_labels_and_label_in_denominator,
+        sampled_dot_cross_entropy_with_integer_labels_uniform,
+    ],
+)
+def test_sampled_dot_cross_entropy_with_integer_labels(func) -> None:
     # Generate synthetic data.
     rngs = nnx.Rngs(17)
     batch_size = 1024
@@ -30,9 +39,7 @@ def test_sampled_dot_cross_entropy_with_integer_labels() -> None:
 
     # Evaluate the sampled cross-entropy and fit a linear regression model to verify
     # slope and intercept.
-    actual = sampled_dot_cross_entropy_with_integer_labels(
-        rngs(), query, embedding, labels, num_samples=60
-    )
+    actual = func(rngs(), query, embedding, labels, num_samples=60)
     fit = numpy.polynomial.Polynomial.fit(expected, actual, 1).convert()
     intercept, coef = fit.coef
     assert abs(coef - 1) < 0.01

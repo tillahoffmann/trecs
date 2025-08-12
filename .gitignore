@@ -6,8 +6,9 @@ __pycache__/
 .vscode
 *.egg-info
 *.ipynb
-*.ipynb-checkpoint
+*.ipynb_checkpoints
 /data/
 ~*
 htmlcov/
 playground/
+workspace/

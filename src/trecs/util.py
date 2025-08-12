@@ -1,6 +1,7 @@
 import contextlib
 from jax import numpy as jnp
 from jax import random
+from jax.scipy.special import logsumexp
 from pathlib import Path
 from typing import Generator, IO
 import importlib.util
@@ -45,7 +46,48 @@ def safe_write(
     tmp_path.rename(path)
 
 
-def sampled_dot_cross_entropy_with_integer_labels(
+def sampled_dot_cross_entropy_with_integer_labels_uniform(
+    key: jnp.ndarray,
+    query: jnp.ndarray,
+    embedding: jnp.ndarray,
+    labels: jnp.ndarray,
+    num_samples: int = 20,
+):
+    """Evaluate the sampled cross entropy based on logits obtained through a dot
+    product `query @ embedding.T`. This function never evaluates the full dot product
+    but only considers a sampled subset of the embedding matrix.
+
+    Args:
+        key: Random number generator key.
+        query: Context to contract with the output embedding with shape
+            `(batch_size, num_features)`.
+        embedding: Output embedding with shape `(num_classes, num_features)`.
+        labels: Target labels with shape `(batch_size,)`.
+        num_samples: Number of samples for the sampled softmax cross-entropy.
+
+    Returns:
+        Sampled cross-entropy with shape `(batch_size,)`.
+    """
+    batch_size, query_num_features = query.shape
+    num_classes, embedding_num_features = embedding.shape
+    assert query_num_features == embedding_num_features
+
+    # Logits for the labels we are after.
+    label_logits = jnp.vecdot(query, embedding[labels])
+
+    # Sample indices uniformly at random with replacement. This introduces extra
+    # variance because we can double-sample certain indices, but this effect is small
+    # when num_samples << num_classes.
+    idx = random.randint(key, (num_samples, batch_size), 0, num_classes)
+    sampled_logits = jnp.vecdot(query, embedding[idx]).T
+    return (
+        -label_logits
+        + logsumexp(sampled_logits, axis=1)
+        + jnp.log(num_classes / num_samples)
+    )
+
+
+def sampled_dot_cross_entropy_with_integer_labels_and_label_in_denominator(
     key: jnp.ndarray,
     query: jnp.ndarray,
     embedding: jnp.ndarray,
@@ -62,6 +104,7 @@ def sampled_dot_cross_entropy_with_integer_labels(
             `(batch_size, num_features)`.
         embedding: Output embedding with shape `(num_classes, num_features)`.
         labels: Target labels with shape `(batch_size,)`.
+        num_samples: Number of samples for the sampled softmax cross-entropy.
 
     Returns:
         Sampled cross-entropy with shape `(batch_size,)`.
