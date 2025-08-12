@@ -3,52 +3,22 @@ from grain import DataLoader
 from grain.sources import RandomAccessDataSource
 from jax import numpy as jnp
 from pathlib import Path
-import pydantic
-from typing import Any, Generic, TypeVar, Type
+from typing import Any
 
 
-class TrainConfig(pydantic.BaseModel):
-    num_steps: int = pydantic.Field(description="Number of training steps.")
-    seed: int = pydantic.Field(description="Random number generator seed.")
-    checkpoint_every: int = pydantic.Field(
-        description="Checkpoint the training state every # steps.", default=1_000
-    )
-    eval_every: int = pydantic.Field(
-        description="Evaluate the validation loss every # steps.", default=1_00
-    )
-    batch_size: int = pydantic.Field(description="Size of mini batches.")
-    learning_rate: float = pydantic.Field(description="Optimizer learning rate.", gt=0)
-
-
-T = TypeVar("T", bound=TrainConfig)
-A = TypeVar("A", bound=pydantic.BaseModel)
-
-
-class Config(pydantic.BaseModel, Generic[T, A]):
-    train: T
-    architecture: A
-
-
-C = TypeVar("C", bound=Config)
-
-
-class Experiment(Generic[C]):
+class Experiment:
     """Base class for experiments.
 
-    Each experiment comprises two pieces:
-
-    1. Model, optimizer, and data pipelines defined in regular Python code.
-    2. Simple configuration parameters, such as data sources, as a Pydantic model.
-
-    The distinction between "simple configuration parameters" and things that are "not
-    simple" is of course blurry. Whenever we start implementing something that feels
-    like a parser to construct 1. from 2., we've probably gone astray.
+    Each experiment comprises model, optimizer, and data pipelines defined in regular Python code,
+    with simple configuration parameters as class attributes.
     """
 
-    CONFIG_CLS: Type
-
-    def __init__(self, config: C) -> None:
-        self.config = config
+    seed: int = 42
+    num_steps: int = 10000
+    eval_every: int = 1000
+    checkpoint_every: int = 1000
+    batch_size: int = 32
+    learning_rate: float = 0.001
 
     def create_model(self, rngs: nnx.Rngs) -> nnx.Module:
         """Create the model to be trained."""

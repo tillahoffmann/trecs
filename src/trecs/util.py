@@ -3,6 +3,8 @@ from jax import numpy as jnp
 from jax import random
 from pathlib import Path
 from typing import Generator, IO
+import importlib.util
+from types import ModuleType
 
 
 @contextlib.contextmanager
@@ -118,3 +120,26 @@ def evaluate_eop_loss_mask(labels: jnp.ndarray, eop_token: int) -> jnp.ndarray:
     length = labels.shape[-1]
     first = jnp.where(has_eop, jnp.argmax(is_eop, axis=1), length - 1)
     return jnp.arange(length) <= first[:, None]
+
+
+def load_module(path: str | Path) -> ModuleType:
+    """
+    Load a module from a file path.
+
+    Args:
+        path: Path to the Python file.
+
+    Returns:
+        Python module loaded from :code:`path`.
+    """
+    path = Path(path).resolve()
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    if spec is None:
+        raise ImportError(f"Failed to create module spec for {path}.")
+
+    module = importlib.util.module_from_spec(spec)
+    if spec.loader is None:
+        raise ImportError(f"Failed to get module loader for {path}.")
+    spec.loader.exec_module(module)
+
+    return module
