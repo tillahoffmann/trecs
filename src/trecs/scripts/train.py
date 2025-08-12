@@ -49,7 +49,9 @@ def restore(
     rngs: nnx.Rngs | None = None,
 ) -> int:
     flax_nodes = {"model": model, "optimizer": optimizer, "rngs": rngs}
-    flax_states = {key: nnx.state(value) for key, value in flax_nodes.items() if value is not None}
+    flax_states = {
+        key: nnx.state(value) for key, value in flax_nodes.items() if value is not None
+    }
     data_iterators = data_iterators or {}
     restored = checkpoint_manager.restore(
         step,

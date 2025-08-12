@@ -1,4 +1,4 @@
-# 🎶 trecs: Transformer-Based Playlist Recommendation
+# 🎶 trecs: Transformer-Based Playlist Recommendation [![trecs](https://github.com/tillahoffmann/trecs/actions/workflows/main.yaml/badge.svg)](https://github.com/tillahoffmann/trecs/actions/workflows/main.yaml)
 
 This repository implements a transformer architecture to complete Spotify playlists given a set of seed tracks. The model is trained on the [Million Playlist Dataset](https://www.aicrowd.com/challenges/spotify-million-playlist-dataset-challenge) (MPD).
 
