@@ -90,6 +90,19 @@ class Sqlite3Dataset:
             self._local.conn = sqlite3.connect(self.conn)
             return self._local.conn
 
+    def _close_conn(self) -> None:
+        # Close the connection if there is one.
+        if isinstance(self.conn, sqlite3.Connection):
+            self.conn.close()
+        elif isinstance(self._local.conn, sqlite3.Connection):
+            self._local.conn.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *_) -> None:
+        self._close_conn()
+
     @property
     def idx(self) -> list[Any]:
         if self._idx is None:
