@@ -8,8 +8,9 @@ from orbax import checkpoint as ocp
 from pathlib import Path
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
-from typing import Any, cast, Type
-from ..experiments import DecoderOnlyExperiment, Experiment, Config, TrainConfig
+from typing import cast
+from ..experiments import Experiment
+from ..util import load_module
 
 
 def checkpoint(
@@ -113,15 +114,35 @@ class _Args:
     num_steps: int | None
     eval_every: int | None
     resume: bool
-    # Core to the results: the experiment and output directory.
-    experiment: str
-    config: Path
+    experiment: Path
     output: Path
 
 
-EXPERIMENTS: dict[str, Type[Experiment]] = {
-    "DecoderOnly": DecoderOnlyExperiment,
-}
+def load_experiment_from_file(experiment_file: Path) -> Experiment:
+    """Load and setup an experiment from a Python file.
+
+    Args:
+        experiment_file: Path to the Python file containing the setup function.
+
+    Returns:
+        Configured experiment instance
+    """
+    module = load_module(experiment_file)
+
+    if not hasattr(module, "setup"):
+        raise AttributeError(
+            f"Module {experiment_file} must contain a function named 'setup'."
+        )
+
+    setup_fn = getattr(module, "setup")
+    experiment = setup_fn()
+
+    if not isinstance(experiment, Experiment):
+        raise TypeError(
+            f"setup() function in {experiment_file} must return an Experiment instance."
+        )
+
+    return experiment
 
 
 def __main__(argv: list[str] | None = None) -> None:
@@ -145,10 +166,9 @@ def __main__(argv: list[str] | None = None) -> None:
     parser.add_argument("output", type=Path, help="Output directory.")
     parser.add_argument(
         "experiment",
-        help="Experiment class.",
-        choices=EXPERIMENTS,
+        type=Path,
+        help="Path to Python file containing a `setup` function that creates an experiment.",
     )
-    parser.add_argument("config", type=Path, help="Path to configuration file.")
     args = cast(_Args, parser.parse_args(argv))
 
     # Complain if the output already exists and we don't intend to resume.
@@ -164,20 +184,16 @@ def __main__(argv: list[str] | None = None) -> None:
             f"Cannot resume '{args.output}' because it does not exist."
         )
 
-    # Load the experiment configuration, adjust it where desired, and create the
-    # experiment.
-    experiment_cls = EXPERIMENTS[args.experiment]
-    config_cls = experiment_cls.CONFIG_CLS
-    config: Config[TrainConfig, Any] = config_cls.model_validate_json(
-        args.config.read_text()
-    )
+    # Load the experiment and apply command line overrides
+    experiment = load_experiment_from_file(args.experiment)
+
+    # Override any train config parameters from command line
     if args.seed is not None:
-        config.train.seed = args.seed
+        experiment.seed = args.seed
     if args.num_steps is not None:
-        config.train.num_steps = args.num_steps
+        experiment.num_steps = args.num_steps
     if args.eval_every is not None:
-        config.train.eval_every = args.eval_every
-    experiment = experiment_cls(config)
+        experiment.eval_every = args.eval_every
 
     # Set up random number generation streams for:
     # 1. parameter initialization for model weights
@@ -186,7 +202,7 @@ def __main__(argv: list[str] | None = None) -> None:
     # 4. sampled softmax cross-entropy for the training batches
     # 5. ... and for the validation batches
     streams = ["params", "dropout", "index_sampler", "train_loss", "valid_loss"]
-    keys = jax.random.split(jax.random.key(config.train.seed), len(streams))
+    keys = jax.random.split(jax.random.key(experiment.seed), len(streams))
     keys = dict(zip(streams, keys))
     rngs = nnx.Rngs(**keys)
 
@@ -239,14 +255,14 @@ def __main__(argv: list[str] | None = None) -> None:
 
         # Start the training loop.
         with (
-            tqdm(total=config.train.num_steps, initial=step) as progress,
+            tqdm(total=experiment.num_steps, initial=step) as progress,
             # One writer each for train and validation
             # (https://stackoverflow.com/a/37156491/1150961). Maybe "valid" would be a
             # better name than "eval", but tensorboard orders the plots alphabetically.
             SummaryWriter(str(args.output / "logdir/train")) as train_writer,
             SummaryWriter(str(args.output / "logdir/eval")) as valid_writer,
         ):
-            while step < config.train.num_steps:
+            while step < experiment.num_steps:
                 # Run one training step.
                 inputs, labels = next(data_iterators["train"])
                 train_loss = train_step(
@@ -260,7 +276,7 @@ def __main__(argv: list[str] | None = None) -> None:
                     )
 
                 # Evaluate the validation loss.
-                if step % config.train.eval_every == 0:
+                if step % experiment.eval_every == 0:
                     inputs, labels = next(data_iterators["valid"])
                     valid_loss = evaluate_loss(
                         model, inputs, labels, prng_key=rngs.valid_loss()
@@ -268,7 +284,7 @@ def __main__(argv: list[str] | None = None) -> None:
                     valid_writer.add_scalar("loss", valid_loss, global_step=step)
 
                 # Checkpoint the model.
-                if step % config.train.checkpoint_every == 0:
+                if step % experiment.checkpoint_every == 0:
                     checkpoint(
                         checkpoint_manager,
                         model=model,

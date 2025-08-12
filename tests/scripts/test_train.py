@@ -12,8 +12,8 @@ from unittest.mock import patch
 import pytest
 
 
-decoder_only_mini_config_path = str(
-    Path(__file__).parent.parent / "assets/decoder-only-mini.json"
+decoder_only_mini_experiment_path = str(
+    Path(__file__).parent.parent / "assets/decoder_only_mini_experiment.py"
 )
 
 
@@ -24,8 +24,7 @@ def test_train(example_db_path: Path, tmp_path: Path) -> None:
         train.__main__(
             [
                 str(output_path),
-                "DecoderOnly",
-                decoder_only_mini_config_path,
+                decoder_only_mini_experiment_path,
             ]
         )
 
@@ -39,8 +38,7 @@ def test_train_resume(example_db_path: Path, tmp_path: Path) -> None:
                 "--num-steps=7",
                 "--eval-every=2",
                 str(output_path1),
-                "DecoderOnly",
-                decoder_only_mini_config_path,
+                decoder_only_mini_experiment_path,
             ]
         )
 
@@ -51,8 +49,7 @@ def test_train_resume(example_db_path: Path, tmp_path: Path) -> None:
                 "--num-steps=4",
                 "--eval-every=2",
                 str(output_path2),
-                "DecoderOnly",
-                decoder_only_mini_config_path,
+                decoder_only_mini_experiment_path,
             ]
         )
         train.__main__(
@@ -61,8 +58,7 @@ def test_train_resume(example_db_path: Path, tmp_path: Path) -> None:
                 "--eval-every=2",
                 "--resume",
                 str(output_path2),
-                "DecoderOnly",
-                decoder_only_mini_config_path,
+                decoder_only_mini_experiment_path,
             ]
         )
 

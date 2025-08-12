@@ -30,6 +30,7 @@ dev = [
     "black>=25.1.0",
     "jupyter>=1.1.1",
     "matplotlib>=3.10.5",
+    "pyright>=1.1.403",
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",
     "scikit-learn>=1.7.1",

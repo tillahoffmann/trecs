@@ -8,10 +8,10 @@ from grain import DataLoader
 import optax
 import os
 from jax import numpy as jnp
-from pydantic import BaseModel
+import pydantic
 import sqlite3
 from typing import cast
-from .util import Experiment, TrainConfig
+from .util import Experiment
 from ..models import PlaylistDecoder
 from ..data import (
     Sqlite3Dataset,
@@ -27,55 +27,40 @@ from ..data import (
 from ..util import sampled_dot_cross_entropy_with_integer_labels, evaluate_eop_loss_mask
 
 
-class DecoderOnlyArchConfig(BaseModel):
-    context_length: int = 50
-    num_layers: int = 6
-    num_heads: int = 8
-    num_features: int = 128
-    num_hidden: int = 256
-    dropout: float = 0.1
-    num_tracks: int | None
-
-
-class DecoderOnlyTrainConfig(TrainConfig):
-    unk_proba: float = 0.01
-    weight_decay: float = 0.01
-
-
-class DecoderOnlyConfig(BaseModel):
-    train: DecoderOnlyTrainConfig
-    arch: DecoderOnlyArchConfig
-
-
-def create_model(config: DecoderOnlyArchConfig, rngs: nnx.Rngs) -> PlaylistDecoder:
-    assert config.num_tracks, "Number of tracks must be specified or inferred."
-    return PlaylistDecoder(
-        context_length=config.context_length,
-        num_layers=config.num_layers,
-        num_heads=config.num_heads,
-        num_tracks=config.num_tracks,
-        num_features=config.num_features,
-        num_hidden=config.num_hidden,
-        dropout=config.dropout,
-        rngs=rngs,
-    )
-
-
 class DecoderOnlyExperiment(Experiment):
-    CONFIG_CLS = DecoderOnlyConfig
+    context_length: int
+    num_layers: int
+    num_heads: int
+    num_features: int
+    num_hidden: int
+    dropout: float = pydantic.Field(ge=0, le=1)
+    num_tracks: int | None
+    unk_proba: float = pydantic.Field(ge=0, le=1)
+    weight_decay: float = pydantic.Field(ge=0)
+    eop_token: int | None = None
+    track_encoder: Encoder | None = None
 
-    def __init__(self, config: DecoderOnlyConfig) -> None:
-        self.config = config
+    # Because the `Encoder` is not a standard class.
+    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
     def create_model(self, rngs: nnx.Rngs) -> PlaylistDecoder:
-        return create_model(self.config.arch, rngs)
+        assert self.num_tracks, "Number of tracks must be specified or inferred."
+        return PlaylistDecoder(
+            context_length=self.context_length,
+            num_layers=self.num_layers,
+            num_heads=self.num_heads,
+            num_tracks=self.num_tracks,
+            num_features=self.num_features,
+            num_hidden=self.num_hidden,
+            dropout=self.dropout,
+            rngs=rngs,
+        )
 
     def create_optimizer(self, model: nnx.Module) -> nnx.Optimizer:
         return nnx.Optimizer(
             model,
             optax.adamw(
-                learning_rate=self.config.train.learning_rate,
-                weight_decay=self.config.train.weight_decay,
+                learning_rate=self.learning_rate, weight_decay=self.weight_decay
             ),
             wrt=nnx.Param,
         )
@@ -96,7 +81,7 @@ class DecoderOnlyExperiment(Experiment):
             LIMIT :context_length + 1
             """,
             {"split": split},
-            {"context_length": self.config.arch.context_length},
+            {"context_length": self.context_length},
         )
         return cast(RandomAccessDataSource, dataset)
 
@@ -117,12 +102,11 @@ class DecoderOnlyExperiment(Experiment):
                     "pos": x["pos"],
                 },
                 validate_output=lambda y: all(
-                    len(seq) <= self.config.arch.context_length + 1
-                    for seq in y.values()
+                    len(seq) <= self.context_length + 1 for seq in y.values()
                 ),
             ),
             # Batch records: [{"track_id": [0, 1], ...}, {"track_id": [4, 5], ...}, ...]
-            BatchTransform(self.config.train.batch_size, on_short="drop"),
+            BatchTransform(self.batch_size, on_short="drop"),
             # Pad values to the same length.
             LambdaMap(pad_batch, fill_value={"track_id": self.eop_token, "pos": 0}),
             # Transpose to get a dictionary keyed by `track_id`, `pos`, etc. Then
@@ -144,11 +128,7 @@ class DecoderOnlyExperiment(Experiment):
                     lambda x, generator: x
                     | {
                         "track_id": [
-                            (
-                                "<UNK>"
-                                if generator.binomial(1, self.config.train.unk_proba)
-                                else y
-                            )
+                            ("<UNK>" if generator.binomial(1, self.unk_proba) else y)
                             for y in x["track_id"]
                         ]
                     }
@@ -194,6 +174,7 @@ class DecoderOnlyExperiment(Experiment):
         )
 
         # Mask out anything after the first end of playlist token.
+        assert self.eop_token is not None, "EOP token has not been initialized."
         mask = evaluate_eop_loss_mask(labels, self.eop_token)
         return sampled_loss @ mask.ravel() / mask.sum()
 
@@ -242,10 +223,10 @@ class DecoderOnlyExperiment(Experiment):
 
         self.eop_token = self.track_encoder("<EOP>")
         num_tracks = len(self.track_encoder)
-        if self.config.arch.num_tracks is None:
-            self.config.arch.num_tracks = num_tracks
-        elif num_tracks > self.config.arch.num_tracks:
+        if self.num_tracks is None:
+            self.num_tracks = num_tracks
+        elif num_tracks > self.num_tracks:
             raise ValueError(
                 f"Dataset contains {num_tracks:,} tracks, but model only supports "
-                f"{self.config.arch.num_tracks:,}."
+                f"{self.num_tracks:,}."
             )
