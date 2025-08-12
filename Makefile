@@ -31,5 +31,5 @@ EXPERIMENT_OUTPUTS = $(addprefix ${WORKDIR}/,${EXPERIMENT_SETUPS:src/trecs/exper
 
 experiments : ${EXPERIMENT_OUTPUTS}
 
-${EXPERIMENT_OUTPUTS} : ${WORKDIR}/% : src/trecs/experiments/%.py data/mpd.db
+${EXPERIMENT_OUTPUTS} : ${WORKDIR}/% : src/trecs/experiments/%.py
 	MPD=${MPD_PATH} python -m trecs.scripts.train $@ $<
