@@ -10,7 +10,7 @@ import os
 from jax import numpy as jnp
 import pydantic
 import sqlite3
-from typing import cast
+from typing import cast, Literal
 from .util import Experiment
 from ..models import PlaylistDecoder
 from ..data import (
@@ -24,7 +24,11 @@ from ..data import (
     BatchTransform,
     Encoder,
 )
-from ..util import sampled_dot_cross_entropy_with_integer_labels, evaluate_eop_loss_mask
+from ..util import (
+    sampled_dot_cross_entropy_with_integer_labels_and_label_in_denominator,
+    sampled_dot_cross_entropy_with_integer_labels_uniform,
+    evaluate_eop_loss_mask,
+)
 
 
 class DecoderOnlyExperiment(Experiment):
@@ -33,6 +37,10 @@ class DecoderOnlyExperiment(Experiment):
     num_heads: int
     num_features: int
     num_hidden: int
+    loss_function: Literal[
+        "label_in_denominator",
+        "uniform",
+    ]
     dropout: float = pydantic.Field(ge=0, le=1)
     num_tracks: int | None
     unk_proba: float = pydantic.Field(ge=0, le=1)
@@ -166,7 +174,16 @@ class DecoderOnlyExperiment(Experiment):
         flat_labels = labels.reshape((batch_size * num_tokens,))
 
         # Evaluate the loss.
-        sampled_loss = sampled_dot_cross_entropy_with_integer_labels(
+        if self.loss_function == "label_in_denominator":
+            func = (
+                sampled_dot_cross_entropy_with_integer_labels_and_label_in_denominator
+            )
+        elif self.loss_function == "uniform":
+            func = sampled_dot_cross_entropy_with_integer_labels_uniform
+        else:
+            raise ValueError(self.loss_function)
+
+        sampled_loss = func(
             prng_key,
             flat_embeddings,
             model.track_embedding.embedding.value,

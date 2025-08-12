@@ -18,4 +18,5 @@ def setup():
         unk_proba=0.05,
         weight_decay=0.01,
         num_tracks=None,
+        loss_function="uniform",
     )
