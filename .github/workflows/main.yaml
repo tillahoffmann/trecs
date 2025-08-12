@@ -25,5 +25,7 @@ jobs:
         run: uv sync --all-groups
       - name: Lint the code
         run: uv run black --check .
+      - name: Run type checks
+        run: uv run pyright
       - name: Run the tests
         run: uv run pytest -v tests
