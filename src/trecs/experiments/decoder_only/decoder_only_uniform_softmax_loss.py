@@ -21,8 +21,6 @@ def setup() -> DecoderOnlyExperiment:
         checkpoint_every=1000,
         loss_function="uniform",
         unk_proba=0.01,
-        # This will be determined based on the encoder.
-        track_encoder=None,
+        # This will be determined by the encoder.
         num_tracks=None,
-        eop_token=None
     )

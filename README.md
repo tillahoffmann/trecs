@@ -48,7 +48,6 @@ We directly sample from the next-token distribution with top-$k$ sampling with u
 
 ## 🚀 Next Steps
 
-* We should prepend a special `<start>` token to all playlists because the first token is never used as a label.
 * The sampled softmax cross-entropy is biased due to the non-linearity in the denominator. We should be able to apply a low-order bias correction to get a better estimate, although it remains to be established if the bias affects the gradients. The bias leads to an *optimistic* estimate of the perplexity (see appendix for details). First-order bias correction is definitely feasible for the loss.
 * The model can be readily extended to include album, artist, and stylistic coherence as well as conditioning on a representation of user taste or expressed user preference for a particular session—future work.
 
