@@ -24,11 +24,12 @@ data/mpd.db : data/spotify_million_playlist_dataset/md5sums.check
 
 # Training.
 
+WORKDIR ?= workspace
+MPD_PATH ?= data/mpd.db
 EXPERIMENT_SETUPS = $(filter-out $(wildcard src/trecs/experiments/*/_*.py),$(wildcard src/trecs/experiments/*/*.py))
-EXPERIMENT_OUTPUTS = $(addprefix workspace/,${EXPERIMENT_SETUPS:src/trecs/experiments/%.py=%})
-$(info ${EXPERIMENT_OUTPUTS})
+EXPERIMENT_OUTPUTS = $(addprefix ${WORKDIR}/,${EXPERIMENT_SETUPS:src/trecs/experiments/%.py=%})
 
 experiments : ${EXPERIMENT_OUTPUTS}
 
-${EXPERIMENT_OUTPUTS} : workspace/% : src/trecs/experiments/%.py data/mpd.db
-	MPD=data/mpd.db python -m trecs.scripts.train $@ $<
+${EXPERIMENT_OUTPUTS} : ${WORKDIR}/% : src/trecs/experiments/%.py data/mpd.db
+	MPD=${MPD_PATH} python -m trecs.scripts.train $@ $<
