@@ -54,6 +54,9 @@ def restore(
         key: nnx.state(value) for key, value in flax_nodes.items() if value is not None
     }
     data_iterators = data_iterators or {}
+    if step is None:
+        step = checkpoint_manager.latest_step()
+    assert step is not None, f"Cannot restore from '{checkpoint_manager.directory}'."
     restored = checkpoint_manager.restore(
         step,
         args=ocp.args.Composite(
@@ -75,6 +78,12 @@ def restore(
     for key, value in flax_nodes.items():
         if value is not None:
             nnx.update(value, restored[key])
+
+    # Report where we restored from.
+    directory = checkpoint_manager._get_read_step_directory(
+        step, checkpoint_manager.directory
+    )
+    print(f"Restored checkpoint from '{directory}'.")
 
     return restored["step"]
 
@@ -244,6 +253,7 @@ def __main__(argv: list[str] | None = None) -> None:
             model = experiment.create_model(rngs)
             optimizer = experiment.create_optimizer(model)
             step = 0
+            print("Created newly initialized model.")
 
         # We use a "safe" update that is only applied when the loss is finite. This
         # mitigates issues with noise from minibatch sampling occasionally messing with
