@@ -9,7 +9,7 @@ def setup():
         seed=17,
         eval_every=1000,
         checkpoint_every=1000,
-        context_length=13,
+        context_length=14,
         num_layers=3,
         num_heads=8,
         num_features=16,

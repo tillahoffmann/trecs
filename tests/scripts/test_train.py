@@ -4,6 +4,7 @@ from flax import nnx
 import optax
 import jax
 from jax import numpy as jnp
+import numpy
 import pandas as pd
 from pathlib import Path
 from trecs.scripts import train
@@ -163,3 +164,56 @@ def test_as_train_step(jit: bool) -> None:
         )
         < 1e-6
     )
+
+
+def test_data_loader_regression(example_db_path: Path, tmp_path: Path) -> None:
+    # This test checks that the output of the data iterator conforms to a specific
+    # output as a regression test.
+    experiment = train.load_experiment_from_file(
+        Path(decoder_only_mini_experiment_path)
+    )
+    with patch.dict("os.environ", MPD=str(example_db_path)):
+        experiment.setup_output(tmp_path)
+        data_source = experiment.create_data_source("train")
+        data_loader = experiment.create_data_loader("train", data_source, 17)
+
+    inputs, labels = next(iter(data_loader))
+
+    expected_pos = [
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 0],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0],
+    ]
+    numpy.testing.assert_array_equal(inputs["pos"], expected_pos)
+
+    expected_track_id = [
+        [0, 3834, 3835, 3836, 3837, 3838, 3839, 3840, 3841, 3842, 3843, 2, 3845, 3846],
+        [0, 2869, 56, 1398, 2870, 2871, 2872, 2873, 2874, 2875, 1124, 2876, 2877, 2878],
+        [0, 2228, 2229, 2230, 2231, 2232, 2233, 2, 2235, 2236, 2237, 2238, 1, 1],
+        [0, 3652, 1182, 2761, 1130, 2384, 3653, 3654, 211, 615, 3655, 1687, 3656, 1715],
+        [0, 283, 284, 285, 286, 287, 288, 289, 290, 291, 2, 293, 294, 295],
+        [
+            0,
+            342,
+            4135,
+            4136,
+            4137,
+            4138,
+            4139,
+            3658,
+            4140,
+            4141,
+            4142,
+            3734,
+            4143,
+            4144,
+        ],
+        [0, 299, 300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 311],
+        [0, 1100, 1101, 1102, 1103, 1104, 1105, 1106, 1107, 1108, 2, 802, 1110, 1],
+    ]
+    numpy.testing.assert_array_equal(inputs["track_id"], expected_track_id)
