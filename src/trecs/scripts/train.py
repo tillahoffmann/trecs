@@ -273,11 +273,13 @@ def __main__(argv: list[str] | None = None) -> None:
             SummaryWriter(str(args.output / "logdir/eval")) as valid_writer,
         ):
             while step < experiment.num_steps:
-                # Run one training step.
+                # Run one training step. We use `block_until_ready` to make sure each
+                # iteration finishes before we attempt the next.
                 inputs, labels = next(data_iterators["train"])
                 train_loss = train_step(
                     model, optimizer, inputs, labels, prng_key=rngs.train_loss()
-                )
+                ).block_until_ready()
+
                 train_writer.add_scalar("loss", train_loss, global_step=step)
                 if not jnp.isfinite(train_loss):
                     print(
