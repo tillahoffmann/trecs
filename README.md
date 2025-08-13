@@ -6,7 +6,19 @@ It can easily be extended to integrate artist, album, and audio features, as wel
 
 ## 🌟 Highlights
 
+The model tends to generate palatable playlists given a seed context of five tracks. Here are a few highlights of more subtle behavior.
 
+### All I Want for Christmas is ...
+
+... Christmas songs. Using only Mariah Carey's "[All I Want for Christmas is You](https://open.spotify.com/track/0bYg9bo50gSsH3LtXe2SQn?si=a5179c14d9ef4959)" as a single-token prompt, the model generates a [Christmas playlist](https://open.spotify.com/playlist/6MzHB01Sh8PVeRxD5SYtSl?si=a2375577a3704690).
+
+### Lo-Fi Beats
+
+The transformer was prompted with five lo-fi tracks and the auto-regressive nature of the model explored related jazz, hiphop, and slowly transitioned to older music. The [generated playlist](https://open.spotify.com/playlist/3I7mfUJdlc8TZ1UZZo2DuX?si=30d547cb223a4b3f) also captures cultural contexts, e.g., Kaytandra (track 8) is [cited](https://weraveyou.com/2024/06/kaytranada-interview-rolling-stone/) as saying "I studied Dilla instead of school" who appears in tracks 4 and 9. J-Dilla in turn [sampled](https://www.whosampled.com/sample/435713/J-Dilla-On-a-Single-Note-S%C3%A9rgio-Mendes-%26-Brasil-%2766-One-Note-Samba-Spanish-Flea/) Sergio Mendes (track 20).
+
+### The Evolution of Hiphop
+
+The model was prompted with five early hiphop tracks in chronological order to generate a [playlist](https://open.spotify.com/playlist/1IdCdLCd1YjNj3TOLu1ava?si=5dee3252f75e4589), which the model completes with tracks from the 90s and early 2000s. Artists include members of N.W.A and their artistic network.
 
 ## 🏗️ Architecture
 
@@ -48,8 +60,11 @@ We directly sample from the next-token distribution with top-$k$ sampling with u
 
 ## 🚀 Next Steps
 
+* The auto-regressive nature of the model without conditioning on side information means it tends to wander into popular areas of the track space. That's what it has learned in the pre-training stage to reproduce the empirical distribution in the million playlist dataset.
+* The model can be readily extended to include album, artist, and stylistic coherence as well as conditioning on a representation of user taste or expressed user preference for a particular session—future work. This could address, although not eliminate, the diffusion in track space as in the lo-fi highlight above.
+* The most recently trained model has a `<start>` token indicating the beginning of a playlist which only contributes to the context of the transformer. Using only the `<start>` token as input, allows fully unconditioned generation—something to be tested.
 * The sampled softmax cross-entropy is biased due to the non-linearity in the denominator. We should be able to apply a low-order bias correction to get a better estimate, although it remains to be established if the bias affects the gradients. The bias leads to an *optimistic* estimate of the perplexity (see appendix for details). First-order bias correction is definitely feasible for the loss.
-* The model can be readily extended to include album, artist, and stylistic coherence as well as conditioning on a representation of user taste or expressed user preference for a particular session—future work.
+* The inference code lives in ad-hoc notebooks and should really be formalized.
 
 ## 📒 Appendix
 
