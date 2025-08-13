@@ -290,7 +290,16 @@ class BatchMapTransform(grain.transforms.Map):
         return [self.func(x, *self.args, **self.kwargs) for x in element]
 
 
-class LambdaRandomMap(grain.transforms.RandomMap, Generic[T, U]):
+class LambdaReprMixin:
+    func: Callable
+
+    def __repr__(self) -> str:
+        _id = id(self)
+        name = self.__class__.__name__
+        return f"<{name} at 0x{_id:x}: {self.func.__name__}>"
+
+
+class LambdaRandomMap(grain.transforms.RandomMap, LambdaReprMixin, Generic[T, U]):
     """Apply a callable to all elements of a map, receiving a random number generator."""
 
     def __init__(
@@ -306,7 +315,7 @@ class LambdaRandomMap(grain.transforms.RandomMap, Generic[T, U]):
         return self.func(element, rng, *self.args, **self.kwargs)
 
 
-class LambdaMap(grain.transforms.Map, Generic[T, U]):
+class LambdaMap(grain.transforms.Map, LambdaReprMixin, Generic[T, U]):
     """Apply a callable to all elements of a map."""
 
     def __init__(
