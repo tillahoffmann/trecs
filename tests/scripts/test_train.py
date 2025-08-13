@@ -17,16 +17,18 @@ decoder_only_mini_experiment_path = str(
 )
 
 
-def test_train(example_db_path: Path, tmp_path: Path) -> None:
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_train(example_db_path: Path, tmp_path: Path, dry_run: bool) -> None:
     with patch.dict("os.environ", MPD=str(example_db_path)):
         # Simple end-to-end run.
         output_path = tmp_path / "train"
-        train.__main__(
-            [
-                str(output_path),
-                decoder_only_mini_experiment_path,
-            ]
-        )
+        argv = [
+            str(output_path),
+            decoder_only_mini_experiment_path,
+        ]
+        if dry_run:
+            argv.append("--dry-run")
+        train.__main__(argv)
 
 
 def test_train_resume(example_db_path: Path, tmp_path: Path) -> None:

@@ -123,6 +123,7 @@ class _Args:
     num_steps: int | None
     eval_every: int | None
     resume: bool
+    dry_run: bool
     experiment: Path
     output: Path
 
@@ -170,6 +171,11 @@ def __main__(argv: list[str] | None = None) -> None:
         "--eval-every",
         type=int,
         help="Evaluate validation loss every # steps, takes precedence over the experiment config.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        help="Perform a dry-run over the dataset without optimization.",
+        action="store_true",
     )
     parser.add_argument("--resume", help="Resume training.", action="store_true")
     parser.add_argument("output", type=Path, help="Output directory.")
@@ -273,9 +279,15 @@ def __main__(argv: list[str] | None = None) -> None:
             SummaryWriter(str(args.output / "logdir/eval")) as valid_writer,
         ):
             while step < experiment.num_steps:
+                # Fetch data from the iterator. If we are only doing a data dry run,
+                # exit here.
+                inputs, labels = next(data_iterators["train"])
+                if args.dry_run:
+                    step += 1
+                    progress.update()
+                    continue
                 # Run one training step. We use `block_until_ready` to make sure each
                 # iteration finishes before we attempt the next.
-                inputs, labels = next(data_iterators["train"])
                 train_loss = train_step(
                     model, optimizer, inputs, labels, prng_key=rngs.train_loss()
                 ).block_until_ready()
@@ -313,17 +325,21 @@ def __main__(argv: list[str] | None = None) -> None:
                     f"train loss: {train_loss:.2f}; valid loss: {valid_loss:.2f}"
                 )
 
-            checkpoint(
-                checkpoint_manager,
-                model=model,
-                optimizer=optimizer,
-                data_iterators=data_iterators,
-                rngs=rngs,
-                step=step,
-            )
-            checkpoint_manager.wait_until_finished()
+            if args.dry_run:
+                print("Finished dry-run over datasets.")
+            else:
+                checkpoint(
+                    checkpoint_manager,
+                    model=model,
+                    optimizer=optimizer,
+                    data_iterators=data_iterators,
+                    rngs=rngs,
+                    step=step,
+                )
+                checkpoint_manager.wait_until_finished()
+                print("Finished training run.")
 
-        print("done")
+        print("Exiting ...")
 
 
 if __name__ == "__main__":
