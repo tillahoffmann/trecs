@@ -20,6 +20,10 @@ The transformer was prompted with five lo-fi tracks and the auto-regressive natu
 
 The model was prompted with five early hiphop tracks in chronological order to generate a [playlist](https://open.spotify.com/playlist/1IdCdLCd1YjNj3TOLu1ava?si=5dee3252f75e4589), which the model completes with tracks from the 90s and early 2000s. Artists include members of N.W.A and their artistic network.
 
+### Robustness to Missingness
+
+The model was prompted with five tracks and then prompted again but with two of the five tracks masked out as out-of-vocabulary tracks, represented by an `<UNK>` token. Despite 40% of the context being missing, 11 of the 14 generated tracks are shared among the [original playlist](https://open.spotify.com/playlist/6t1kaI6wXbqc7DTBkmRrr5) and the [masked playlist](https://open.spotify.com/playlist/6uHQTiUO2mQveh9SItRPO1)—although in a different order. Masked tracks are represented by John Cage's [4'33](https://open.spotify.com/track/2bNCdW4rLnCTzgqUXTTDO1).
+
 ## 🏗️ Architecture
 
 The model is a 6-layer causal transformer with 8 heads, 128 embedding dimensions, pre-layer norm, and 0.1 dropout during training. The feed-forward network of each transformer block is a two-layer dense network with ReLU activations and hidden dimension of 256. The model uses weight-tying, i.e., the output head is identical to the token embeddings. We use token-based positional encodings (as opposed to Fourier-style positional encodings) with a maximum context length of 50 tracks.
